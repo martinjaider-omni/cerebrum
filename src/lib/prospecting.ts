@@ -175,8 +175,19 @@ async function attioAddToList(
 async function attioUpsertPerson(
   token: string,
   name: string,
-  emails: string[]
+  emails: string[],
+  companyRecordId: string | null
 ): Promise<string | null> {
+  const values: Record<string, unknown> = {
+    name: [{ first_name: name.split(' ')[0], last_name: name.split(' ').slice(1).join(' ') }],
+    email_addresses: emails.map((email) => ({ email_address: email })),
+  }
+
+  // Link person to company
+  if (companyRecordId) {
+    values.company = [{ target: 'companies', id: { record_id: companyRecordId } }]
+  }
+
   const res = await fetchWithRetry('https://api.attio.com/v2/objects/people/records', {
     method: 'PUT',
     headers: {
@@ -185,16 +196,39 @@ async function attioUpsertPerson(
     },
     body: JSON.stringify({
       matching_attribute: 'email_addresses',
-      values: {
-        name: [{ first_name: name.split(' ')[0], last_name: name.split(' ').slice(1).join(' ') }],
-        email_addresses: emails.map((email) => ({ email_address: email })),
-      },
+      values,
     }),
     signal: AbortSignal.timeout(15_000),
   })
   if (!res.ok) return null
   const json = await res.json()
   return json.data?.id?.record_id ?? null
+}
+
+async function attioSetListEntryContact(
+  token: string,
+  listId: string,
+  entryId: string,
+  personRecordId: string
+): Promise<void> {
+  await fetchWithRetry(
+    `https://api.attio.com/v2/lists/${listId}/entries/${entryId}`,
+    {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        data: {
+          values: {
+            contact: [{ target: 'people', id: { record_id: personRecordId } }],
+          },
+        },
+      }),
+      signal: AbortSignal.timeout(15_000),
+    }
+  )
 }
 
 // ── Batch processor ────────────────────────────────────────────────────────────
@@ -269,6 +303,7 @@ export async function processBatch(batchId: string): Promise<void> {
       })
 
       // 4. Create people
+      let isFirstContact = true
       for (const person of apolloPeople) {
         let personalPhone: string | null = null
         let phoneStatus: 'pending' | 'revealed' | 'none' = 'pending'
@@ -280,11 +315,28 @@ export async function processBatch(batchId: string): Promise<void> {
 
         let attioPersonId: string | null = null
         if (settings.attioAccessToken && person.email) {
+          // Upsert person linked to company
           attioPersonId = await attioUpsertPerson(
             settings.attioAccessToken,
             person.name,
-            person.email ? [person.email] : []
+            person.email ? [person.email] : [],
+            attioCompanyId
           )
+
+          // Set first contact as main contact on the list entry
+          if (attioPersonId && attioListEntryId && isFirstContact && settings.attioListId) {
+            try {
+              await attioSetListEntryContact(
+                settings.attioAccessToken,
+                settings.attioListId,
+                attioListEntryId,
+                attioPersonId
+              )
+            } catch {
+              // Non-critical: list entry contact attribute may not exist
+            }
+            isFirstContact = false
+          }
         }
 
         await db.prospectPerson.create({
