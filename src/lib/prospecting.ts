@@ -46,7 +46,9 @@ async function apolloSearchOrg(
   })
   if (!res.ok) throw new Error(`Apollo org search ${res.status}`)
   const json = await res.json()
-  return json.organizations?.[0] ?? null
+  const org = json.organizations?.[0] ?? json.accounts?.[0] ?? null
+  if (org) console.log(`[apollo] Found org: ${org.name} (${org.primary_domain ?? 'no domain'})`)
+  return org
 }
 
 async function apolloSearchPeople(
@@ -56,7 +58,6 @@ async function apolloSearchPeople(
   maxPeople: number,
   revealEmails: boolean
 ): Promise<ApolloPerson[]> {
-  // Always use people/search first to find contacts
   const searchBody: Record<string, unknown> = {
     organization_ids: [orgId],
     page: 1,
@@ -78,7 +79,21 @@ async function apolloSearchPeople(
     throw new Error(`Apollo people search ${res.status}: ${errorBody}`)
   }
   const json = await res.json()
-  const people: ApolloPerson[] = json.people ?? []
+
+  // mixed_people/api_search returns contacts[], not people[]
+  const raw: Array<Record<string, unknown>> = json.contacts ?? json.people ?? []
+
+  const people: ApolloPerson[] = raw.map((c) => ({
+    id: (c.id as string) ?? '',
+    name: (c.name as string) ?? (c.first_name ? `${c.first_name} ${c.last_name ?? ''}`.trim() : ''),
+    title: (c.title as string) ?? '',
+    seniority: (c.seniority as string) ?? '',
+    email: (c.email as string) ?? null,
+    organization_id: (c.organization_id as string) ?? orgId,
+    phone_numbers: c.phone_numbers as ApolloPerson['phone_numbers'],
+  }))
+
+  console.log(`[apollo] Found ${people.length} contacts for org ${orgId}`)
 
   // If reveal emails is enabled, enrich each person via /people/match
   if (revealEmails && people.length > 0) {
