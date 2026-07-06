@@ -2,7 +2,7 @@ import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { NextResponse } from 'next/server'
 import { Vibrant } from 'node-vibrant/node'
-import { uploadFile } from '@/lib/storage'
+import { uploadFile, deleteFile } from '@/lib/storage'
 
 const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml', 'image/gif']
 const MAX_BYTES = 5 * 1024 * 1024 // 5 MB
@@ -28,6 +28,20 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const buf = Buffer.from(await file.arrayBuffer())
   if (buf.byteLength > MAX_BYTES)
     return NextResponse.json({ error: 'File too large (max 5 MB)' }, { status: 400 })
+
+  // Sanitize SVG: strip script tags, event handlers, and external references
+  if (file.type === 'image/svg+xml') {
+    const svg = buf.toString('utf-8')
+    if (/<script[\s>]/i.test(svg) || /on\w+\s*=/i.test(svg) || /javascript:/i.test(svg) || /data:/i.test(svg)) {
+      return NextResponse.json({ error: 'SVG contains potentially unsafe content' }, { status: 400 })
+    }
+  }
+
+  // Delete previous logo if exists
+  if (proposal.brandLogoUrl) {
+    const oldKey = proposal.brandLogoUrl.replace(/^\/api\/uploads\//, '')
+    await deleteFile(oldKey).catch(() => {})
+  }
 
   const ext = file.type.split('/')[1].replace('jpeg', 'jpg').replace('svg+xml', 'svg')
   const key = `logos/${params.id}.${ext}`

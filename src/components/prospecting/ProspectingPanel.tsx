@@ -47,6 +47,11 @@ interface Props {
 
 // ── Settings sub-panel (admin only) ───────────────────────────────────────────
 
+interface TestStatus {
+  apollo: { ok: boolean; error?: string; detail?: string }
+  attio: { ok: boolean; error?: string; detail?: string } | null
+}
+
 function SettingsPanel({ onClose }: { onClose: () => void }) {
   const [form, setForm] = useState({
     apolloApiKey: '',
@@ -60,6 +65,8 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<TestStatus | null>(null)
 
   useEffect(() => {
     fetch('/api/settings/integrations')
@@ -81,6 +88,7 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
+    setTestResult(null)
     await fetch('/api/settings/integrations', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -92,6 +100,24 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
     setSaving(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
+  }
+
+  async function handleTest() {
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const res = await fetch('/api/settings/integrations/test', { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Error')
+      setTestResult(json)
+    } catch {
+      setTestResult({
+        apollo: { ok: false, error: 'No se pudo ejecutar el test' },
+        attio: null,
+      })
+    } finally {
+      setTesting(false)
+    }
   }
 
   const inputCls = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500'
@@ -146,10 +172,61 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
           </label>
         </div>
 
-        <button type="submit" disabled={saving} className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50">
-          {saving ? 'Guardando…' : saved ? '✓ Guardado' : 'Guardar configuración'}
-        </button>
+        <div className="flex items-center gap-3">
+          <button type="submit" disabled={saving} className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50">
+            {saving ? 'Guardando…' : saved ? '✓ Guardado' : 'Guardar configuración'}
+          </button>
+          <button
+            type="button"
+            onClick={handleTest}
+            disabled={testing || saving}
+            className="px-4 py-2 border border-gray-300 hover:bg-gray-50 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+          >
+            {testing ? 'Verificando…' : '🔌 Verificar conexiones'}
+          </button>
+        </div>
       </form>
+
+      {/* Test results */}
+      {testResult && (
+        <div className="space-y-2 pt-2">
+          <div className={`flex items-center gap-3 rounded-lg px-4 py-3 text-sm ${testResult.apollo.ok ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+            <span className="text-lg">{testResult.apollo.ok ? '✅' : '❌'}</span>
+            <div>
+              <p className={`font-semibold ${testResult.apollo.ok ? 'text-green-800' : 'text-red-800'}`}>
+                Apollo {testResult.apollo.ok ? 'conectado' : 'error'}
+              </p>
+              <p className={`text-xs ${testResult.apollo.ok ? 'text-green-600' : 'text-red-600'}`}>
+                {testResult.apollo.ok ? testResult.apollo.detail : testResult.apollo.error}
+              </p>
+            </div>
+          </div>
+
+          {testResult.attio && (
+            <div className={`flex items-center gap-3 rounded-lg px-4 py-3 text-sm ${testResult.attio.ok ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+              <span className="text-lg">{testResult.attio.ok ? '✅' : '❌'}</span>
+              <div>
+                <p className={`font-semibold ${testResult.attio.ok ? 'text-green-800' : 'text-red-800'}`}>
+                  Attio {testResult.attio.ok ? 'conectado' : 'error'}
+                </p>
+                <p className={`text-xs ${testResult.attio.ok ? 'text-green-600' : 'text-red-600'}`}>
+                  {testResult.attio.ok ? testResult.attio.detail : testResult.attio.error}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {!form.attioAccessToken && !testResult.attio && (
+            <div className="flex items-center gap-3 rounded-lg px-4 py-3 text-sm bg-gray-50 border border-gray-200">
+              <span className="text-lg">⏭</span>
+              <div>
+                <p className="font-semibold text-gray-600">Attio no configurado</p>
+                <p className="text-xs text-gray-500">Opcional — agrega un token para sincronizar contactos</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -12,15 +12,17 @@ import {
   LogOut,
 } from 'lucide-react'
 
-const navLinks = [
+const baseLinks = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/proposals/new', label: 'Nueva Propuesta', icon: FilePlus },
   { href: '/prospecting', label: 'Prospección', icon: Users },
-  { href: '/admin', label: 'Admin', icon: Shield },
 ]
 
-export function Sidebar() {
+const adminLink = { href: '/admin', label: 'Admin', icon: Shield }
+
+export function Sidebar({ isAdmin = false }: { isAdmin?: boolean }) {
   const pathname = usePathname()
+  const navLinks = isAdmin ? [...baseLinks, adminLink] : baseLinks
 
   return (
     <aside className="flex h-screen w-64 flex-col border-r bg-background px-4 py-6">

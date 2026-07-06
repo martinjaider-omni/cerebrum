@@ -187,6 +187,7 @@ export function ProposalEditor({ initial }: { initial: ProposalData }) {
   const [brandImporting, setBrandImporting] = useState(false)
   const [brandImportError, setBrandImportError] = useState<string | null>(null)
   const [logoUploading, setLogoUploading] = useState(false)
+  const [logoError, setLogoError] = useState<string | null>(null)
   const logoInputId = useId()
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [shareLoading, setShareLoading] = useState(false)
@@ -225,6 +226,17 @@ export function ProposalEditor({ initial }: { initial: ProposalData }) {
   )
 
   useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current) }, [])
+
+  // Warn before leaving with unsaved changes
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (saveState === 'unsaved' || debounceRef.current) {
+        e.preventDefault()
+      }
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [saveState])
 
   const toggleFeature = (id: string) => {
     update({
@@ -279,6 +291,7 @@ export function ProposalEditor({ initial }: { initial: ProposalData }) {
 
   async function handleLogoUpload(file: File) {
     setLogoUploading(true)
+    setLogoError(null)
     try {
       const form = new FormData()
       form.append('file', file)
@@ -293,7 +306,7 @@ export function ProposalEditor({ initial }: { initial: ProposalData }) {
         brandPalette: json.brandPalette ?? prev.brandPalette,
       }))
     } catch (err) {
-      alert(String(err instanceof Error ? err.message : err))
+      setLogoError(String(err instanceof Error ? err.message : err))
     } finally {
       setLogoUploading(false)
     }
@@ -329,7 +342,17 @@ export function ProposalEditor({ initial }: { initial: ProposalData }) {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
-      // Clipboard API not available — select the text manually
+      // Clipboard API not available — use textarea fallback
+      const ta = document.createElement('textarea')
+      ta.value = shareUrl
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
     }
   }
 
@@ -463,6 +486,12 @@ export function ProposalEditor({ initial }: { initial: ProposalData }) {
           {brandImportError && (
             <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
               {brandImportError}
+            </div>
+          )}
+
+          {logoError && (
+            <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              {logoError}
             </div>
           )}
 

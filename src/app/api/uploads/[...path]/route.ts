@@ -13,6 +13,9 @@ const MIME_MAP: Record<string, string> = {
   svg: 'image/svg+xml',
   ico: 'image/x-icon',
   pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  json: 'application/json',
+  csv: 'text/csv',
 }
 
 export async function GET(_req: Request, { params }: { params: { path: string[] } }) {
@@ -34,6 +37,6 @@ export async function GET(_req: Request, { params }: { params: { path: string[] 
       },
     })
   } catch {
-    return new NextResponse('Not Found', { status: 404 })
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 }

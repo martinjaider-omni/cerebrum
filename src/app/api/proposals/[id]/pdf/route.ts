@@ -49,19 +49,22 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     baseUrl
   )
 
-  const executablePath = await chromiumPkg.executablePath()
-  const browser = await chromium.launch({
-    executablePath,
-    args: [...chromiumPkg.args, '--no-sandbox'],
-    headless: true,
-  })
+  let browser
   try {
+    const executablePath = await chromiumPkg.executablePath()
+    browser = await chromium.launch({
+      executablePath,
+      args: [...chromiumPkg.args, '--no-sandbox'],
+      headless: true,
+    })
+
     const page = await browser.newPage()
-    await page.setContent(html, { waitUntil: 'networkidle' })
+    await page.setContent(html, { waitUntil: 'load', timeout: 30000 })
     const pdf = await page.pdf({
       format: 'A4',
       printBackground: true,
       margin: { top: '0', right: '0', bottom: '0', left: '0' },
+      timeout: 15000,
     })
 
     const filename = `propuesta-${proposal.clientName || proposal.id}.pdf`
@@ -75,7 +78,13 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
         'Cache-Control': 'no-store',
       },
     })
+  } catch (err) {
+    console.error('PDF generation failed:', err)
+    return NextResponse.json(
+      { error: 'PDF generation failed', detail: err instanceof Error ? err.message : String(err) },
+      { status: 500 }
+    )
   } finally {
-    await browser.close()
+    await browser?.close()
   }
 }

@@ -1,5 +1,19 @@
 import { db } from './db'
 
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  retries = 2,
+  delayMs = 1000
+): Promise<Response> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const res = await fetch(url, options)
+    if (res.ok || res.status < 500) return res
+    if (attempt < retries) await new Promise((r) => setTimeout(r, delayMs * (attempt + 1)))
+  }
+  return fetch(url, options)
+}
+
 // ── Apollo API helpers ─────────────────────────────────────────────────────────
 
 interface ApolloOrg {
@@ -24,7 +38,7 @@ async function apolloSearchOrg(
   apiKey: string,
   name: string
 ): Promise<ApolloOrg | null> {
-  const res = await fetch('https://api.apollo.io/v1/organizations/search', {
+  const res = await fetchWithRetry('https://api.apollo.io/v1/organizations/search', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey },
     body: JSON.stringify({ q_organization_name: name, page: 1, per_page: 1 }),
@@ -49,7 +63,7 @@ async function apolloSearchPeople(
   }
   if (titles.length > 0) body.person_titles = titles
 
-  const res = await fetch(
+  const res = await fetchWithRetry(
     revealEmails
       ? 'https://api.apollo.io/v1/mixed_people/search'
       : 'https://api.apollo.io/v1/people/search',
@@ -69,7 +83,7 @@ async function apolloRevealPhone(
   apiKey: string,
   personId: string
 ): Promise<string | null> {
-  const res = await fetch(`https://api.apollo.io/v1/people/match`, {
+  const res = await fetchWithRetry('https://api.apollo.io/v1/people/match', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey },
     body: JSON.stringify({ id: personId, reveal_personal_emails: false, reveal_phone_number: true }),
@@ -87,7 +101,7 @@ async function attioUpsertCompany(
   name: string,
   domain: string
 ): Promise<string | null> {
-  const res = await fetch('https://api.attio.com/v2/objects/companies/records', {
+  const res = await fetchWithRetry('https://api.attio.com/v2/objects/companies/records', {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -109,7 +123,7 @@ async function attioAddToList(
   listId: string,
   companyRecordId: string
 ): Promise<string | null> {
-  const res = await fetch(`https://api.attio.com/v2/lists/${listId}/entries`, {
+  const res = await fetchWithRetry(`https://api.attio.com/v2/lists/${listId}/entries`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -130,7 +144,7 @@ async function attioUpsertPerson(
   name: string,
   emails: string[]
 ): Promise<string | null> {
-  const res = await fetch('https://api.attio.com/v2/objects/people/records', {
+  const res = await fetchWithRetry('https://api.attio.com/v2/objects/people/records', {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',

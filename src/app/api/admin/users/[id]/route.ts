@@ -45,6 +45,16 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   if (params.id === session.user?.id)
     return NextResponse.json({ error: 'No puedes eliminarte a ti mismo' }, { status: 400 })
 
+  // Check for owned proposals and batches
+  const [proposalCount, batchCount] = await Promise.all([
+    db.proposal.count({ where: { ownerId: params.id } }),
+    db.prospectingBatch.count({ where: { ownerId: params.id } }),
+  ])
+  if (proposalCount > 0 || batchCount > 0)
+    return NextResponse.json({
+      error: `El usuario tiene ${proposalCount} propuesta(s) y ${batchCount} lote(s) de prospección. Reasignalos antes de eliminar.`,
+    }, { status: 409 })
+
   await db.user.delete({ where: { id: params.id } })
   return NextResponse.json({ ok: true })
 }

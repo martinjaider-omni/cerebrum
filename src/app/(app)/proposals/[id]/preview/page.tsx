@@ -2,6 +2,7 @@ import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { notFound, redirect } from 'next/navigation'
 import { renderProposalHtml } from '@/lib/proposal-template'
+import { LandingPromptButton } from '@/components/proposals/LandingPromptButton'
 
 export default async function PreviewProposalPage({ params }: { params: { id: string } }) {
   const session = await auth()
@@ -58,6 +59,7 @@ export default async function PreviewProposalPage({ params }: { params: { id: st
         </a>
         <div className="flex-1" />
         <span className="text-sm text-gray-400">{proposal.name}</span>
+        <LandingPromptButton proposalId={params.id} />
         <a
           href={`/api/proposals/${params.id}/pdf`}
           target="_blank"

@@ -6,7 +6,7 @@ services:
       - "3000:3000"
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/omniwallet
-      NEXTAUTH_SECRET: change-me-in-production-min-32-chars
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?Set NEXTAUTH_SECRET in .env (min 32 chars)}
       NEXTAUTH_URL: http://localhost:3000
       STORAGE_LOCAL: "true"
     depends_on:
