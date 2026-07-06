@@ -1,0 +1,194 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String
+  name         String
+  role         Role       @default(sales)
+  createdAt    DateTime   @default(now())
+  proposals    Proposal[]
+  batches      ProspectingBatch[]
+}
+
+enum Role {
+  admin
+  sales
+}
+
+model Proposal {
+  id          String         @id @default(cuid())
+  ownerId     String
+  owner       User           @relation(fields: [ownerId], references: [id])
+  name        String
+  status      ProposalStatus @default(draft)
+  clientName  String         @default("")
+  clientUrl   String         @default("")
+  clientSector String        @default("")
+  clientContact String       @default("")
+  clientDemoDate DateTime?
+  channelOnline Boolean      @default(true)
+  channelStore  Boolean      @default(false)
+  ordersOnline  Int          @default(0)
+  ordersOffline Int          @default(0)
+  offlineRegPct Int          @default(30)
+  activityFactor Float       @default(1.3)
+  techEcommerce String       @default("")
+  techPos       String       @default("")
+  techCrm       String       @default("")
+  features      String[]
+  implPace      ImplPace     @default(estandar)
+  enterpriseEnabled   Boolean  @default(false)
+  enterpriseMonthlyFee Int?
+  enterpriseTerm  String     @default("12 meses")
+  enterpriseIncludes String[]
+  brandLogoUrl  String?
+  brandPrimary  String       @default("#3E95B0")
+  brandSecondary String      @default("#255664")
+  brandPalette  String[]
+  message       String       @default("")
+  overrides     Json         @default("{}")
+  computed      Json         @default("{}")
+  shareToken    String?      @unique
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  assets        Asset[]
+}
+
+enum ProposalStatus {
+  draft
+  final
+}
+
+enum ImplPace {
+  rapida
+  estandar
+  holgada
+}
+
+model Asset {
+  id          String    @id @default(cuid())
+  proposalId  String
+  proposal    Proposal  @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  kind        AssetKind
+  filename    String
+  mime        String
+  size        Int
+  storageKey  String
+  source      AssetSource @default(upload)
+  createdAt   DateTime  @default(now())
+}
+
+enum AssetKind {
+  image
+  pdf
+  docx
+  logo
+}
+
+enum AssetSource {
+  upload
+  scrape
+}
+
+model Catalog {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  data      Json
+  updatedAt DateTime @updatedAt
+}
+
+model IntegrationSettings {
+  id                  String   @id @default(cuid())
+  apolloApiKey        String   @default("")
+  attioAccessToken    String   @default("")
+  attioListId         String   @default("")
+  icpTitles           String[]
+  maxPeoplePerCompany Int      @default(3)
+  revealPhones        Boolean  @default(false)
+  revealEmails        Boolean  @default(true)
+  updatedById         String?
+  updatedAt           DateTime @updatedAt
+}
+
+model ProspectingBatch {
+  id        String      @id @default(cuid())
+  ownerId   String
+  owner     User        @relation(fields: [ownerId], references: [id])
+  source    BatchSource
+  status    BatchStatus @default(queued)
+  counts    Json        @default("{\"companies\":0,\"people\":0,\"phones\":0,\"errors\":0}")
+  createdAt DateTime    @default(now())
+  companies ProspectCompany[]
+}
+
+enum BatchSource {
+  csv
+  text
+}
+
+enum BatchStatus {
+  queued
+  processing
+  done
+  error
+}
+
+model ProspectCompany {
+  id              String        @id @default(cuid())
+  batchId         String
+  batch           ProspectingBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  inputName       String
+  domain          String        @default("")
+  apolloOrgId     String?
+  attioCompanyId  String?
+  attioListEntryId String?
+  status          CompanyStatus @default(pending)
+  error           String?
+  createdAt       DateTime      @default(now())
+  people          ProspectPerson[]
+}
+
+enum CompanyStatus {
+  pending
+  enriching
+  done
+  error
+}
+
+model ProspectPerson {
+  id            String        @id @default(cuid())
+  companyId     String
+  company       ProspectCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  apolloPersonId String?
+  fullName      String
+  title         String        @default("")
+  seniority     String        @default("")
+  emails        String[]
+  personalPhone String?
+  companyPhone  String?
+  phoneStatus   PhoneStatus   @default(pending)
+  attioPersonId String?
+  status        PersonStatus  @default(pending)
+  error         String?
+  createdAt     DateTime      @default(now())
+}
+
+enum PhoneStatus {
+  pending
+  revealed
+  none
+}
+
+enum PersonStatus {
+  pending
+  done
+  error
+}
