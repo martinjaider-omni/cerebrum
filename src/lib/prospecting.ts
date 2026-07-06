@@ -56,27 +56,60 @@ async function apolloSearchPeople(
   maxPeople: number,
   revealEmails: boolean
 ): Promise<ApolloPerson[]> {
-  const body: Record<string, unknown> = {
+  // Always use people/search first to find contacts
+  const searchBody: Record<string, unknown> = {
     organization_ids: [orgId],
     page: 1,
     per_page: maxPeople,
   }
-  if (titles.length > 0) body.person_titles = titles
+  if (titles.length > 0) searchBody.person_titles = titles
 
   const res = await fetchWithRetry(
-    revealEmails
-      ? 'https://api.apollo.io/v1/mixed_people/search'
-      : 'https://api.apollo.io/v1/people/search',
+    'https://api.apollo.io/v1/people/search',
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey },
-      body: JSON.stringify(body),
+      body: JSON.stringify(searchBody),
       signal: AbortSignal.timeout(15_000),
     }
   )
-  if (!res.ok) throw new Error(`Apollo people search ${res.status}`)
+  if (!res.ok) {
+    const errorBody = await res.text().catch(() => '')
+    throw new Error(`Apollo people search ${res.status}: ${errorBody}`)
+  }
   const json = await res.json()
-  return json.people ?? []
+  const people: ApolloPerson[] = json.people ?? []
+
+  // If reveal emails is enabled, enrich each person via /people/match
+  if (revealEmails && people.length > 0) {
+    for (let i = 0; i < people.length; i++) {
+      try {
+        const matchRes = await fetchWithRetry(
+          'https://api.apollo.io/v1/people/match',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey },
+            body: JSON.stringify({
+              id: people[i].id,
+              reveal_personal_emails: true,
+              reveal_phone_number: false,
+            }),
+            signal: AbortSignal.timeout(15_000),
+          }
+        )
+        if (matchRes.ok) {
+          const matchJson = await matchRes.json()
+          if (matchJson.person?.email) {
+            people[i].email = matchJson.person.email
+          }
+        }
+      } catch {
+        // Continue with existing data if reveal fails
+      }
+    }
+  }
+
+  return people
 }
 
 async function apolloRevealPhone(
