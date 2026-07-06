@@ -2,9 +2,8 @@ import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { NextResponse } from 'next/server'
 import { renderProposalHtml } from '@/lib/proposal-template'
-import { chromium } from 'playwright'
-
-const CHROMIUM_PATH = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'
+import chromiumPkg from '@sparticuz/chromium'
+import { chromium } from 'playwright-core'
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   const session = await auth()
@@ -50,7 +49,12 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     baseUrl
   )
 
-  const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, args: ['--no-sandbox'] })
+  const executablePath = await chromiumPkg.executablePath()
+  const browser = await chromium.launch({
+    executablePath,
+    args: [...chromiumPkg.args, '--no-sandbox'],
+    headless: true,
+  })
   try {
     const page = await browser.newPage()
     await page.setContent(html, { waitUntil: 'networkidle' })

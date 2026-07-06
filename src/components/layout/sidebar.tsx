@@ -2,12 +2,14 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { signOut } from 'next-auth/react'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard,
   FilePlus,
   Users,
   Shield,
+  LogOut,
 } from 'lucide-react'
 
 const navLinks = [
@@ -26,7 +28,7 @@ export function Sidebar() {
         <h1 className="text-lg font-bold text-primary">OmniWallet</h1>
         <p className="text-xs text-muted-foreground">Generador de Propuestas</p>
       </div>
-      <nav className="flex flex-col gap-1">
+      <nav className="flex flex-col gap-1 flex-1">
         {navLinks.map(({ href, label, icon: Icon }) => (
           <Link
             key={href}
@@ -41,6 +43,13 @@ export function Sidebar() {
           </Link>
         ))}
       </nav>
+      <button
+        onClick={() => signOut({ callbackUrl: '/login' })}
+        className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors mt-4"
+      >
+        <LogOut className="h-4 w-4" />
+        Cerrar sesión
+      </button>
     </aside>
   )
 }

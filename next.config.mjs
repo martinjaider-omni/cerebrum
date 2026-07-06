@@ -8,7 +8,7 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   experimental: {
-    serverComponentsExternalPackages: ['cheerio', 'node-vibrant', 'playwright-core', '@playwright/browser-chromium'],
+    serverComponentsExternalPackages: ['cheerio', 'node-vibrant', 'playwright-core', '@sparticuz/chromium'],
   },
 }
 
