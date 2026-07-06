@@ -18,10 +18,13 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   if (batch.status !== 'error' && batch.status !== 'done')
     return NextResponse.json({ error: 'Solo se pueden reintentar batches con estado error o done' }, { status: 400 })
 
-  // Reset failed/pending companies to pending so they get reprocessed
+  // Reset ALL companies to pending and delete their people so they get fully reprocessed
+  await db.prospectPerson.deleteMany({
+    where: { company: { batchId: params.id } },
+  })
   await db.prospectCompany.updateMany({
-    where: { batchId: params.id, status: { in: ['error', 'pending'] } },
-    data: { status: 'pending', error: null },
+    where: { batchId: params.id },
+    data: { status: 'pending', error: null, apolloOrgId: null, attioCompanyId: null, attioListEntryId: null, domain: '' },
   })
 
   // Reset batch status
