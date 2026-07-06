@@ -65,7 +65,7 @@ async function apolloSearchPeople(
   if (titles.length > 0) searchBody.person_titles = titles
 
   const res = await fetchWithRetry(
-    'https://api.apollo.io/v1/people/search',
+    'https://api.apollo.io/v1/mixed_people/api_search',
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey },
