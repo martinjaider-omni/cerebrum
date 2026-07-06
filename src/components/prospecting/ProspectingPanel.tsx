@@ -236,12 +236,26 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
 function BatchDetailPanel({ batchId, onClose }: { batchId: string; onClose: () => void }) {
   const [batch, setBatch] = useState<BatchDetail | null>(null)
   const [loading, setLoading] = useState(true)
+  const [retrying, setRetrying] = useState(false)
 
   const load = useCallback(() => {
     fetch(`/api/prospecting/batches/${batchId}`)
       .then((r) => r.json())
       .then((d) => { setBatch(d); setLoading(false) })
   }, [batchId])
+
+  async function handleRetry() {
+    setRetrying(true)
+    try {
+      const res = await fetch(`/api/prospecting/batches/${batchId}/retry`, { method: 'POST' })
+      if (res.ok) {
+        setLoading(true)
+        load()
+      }
+    } finally {
+      setRetrying(false)
+    }
+  }
 
   useEffect(() => {
     load()
@@ -271,7 +285,18 @@ function BatchDetailPanel({ batchId, onClose }: { batchId: string; onClose: () =
             </span>
           )}
         </div>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-sm">✕ Cerrar</button>
+        <div className="flex items-center gap-2">
+          {batch && (batch.status === 'error' || batch.status === 'done') && (
+            <button
+              onClick={handleRetry}
+              disabled={retrying}
+              className="px-3 py-1.5 text-xs font-medium bg-orange-50 text-orange-700 border border-orange-200 rounded-lg hover:bg-orange-100 transition-colors disabled:opacity-50"
+            >
+              {retrying ? 'Reintentando…' : '🔄 Reintentar fallidos'}
+            </button>
+          )}
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-sm">✕ Cerrar</button>
+        </div>
       </div>
 
       {loading && <div className="p-6 text-sm text-gray-400">Cargando…</div>}
