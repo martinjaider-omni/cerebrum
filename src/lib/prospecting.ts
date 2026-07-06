@@ -80,8 +80,24 @@ async function apolloSearchPeople(
   }
   const json = await res.json()
 
-  // mixed_people/api_search returns contacts[], not people[]
-  const raw: Array<Record<string, unknown>> = json.contacts ?? json.people ?? []
+  // Log raw response keys and counts to diagnose
+  const responseKeys = Object.keys(json)
+  console.log(`[apollo] People search response keys: ${responseKeys.join(', ')}`)
+  for (const key of responseKeys) {
+    if (Array.isArray(json[key])) {
+      console.log(`[apollo]   ${key}: ${json[key].length} items`)
+      if (json[key].length > 0) {
+        console.log(`[apollo]   ${key}[0] keys: ${Object.keys(json[key][0]).join(', ')}`)
+      }
+    } else if (typeof json[key] === 'object' && json[key] !== null) {
+      console.log(`[apollo]   ${key}: ${JSON.stringify(json[key]).slice(0, 200)}`)
+    } else {
+      console.log(`[apollo]   ${key}: ${json[key]}`)
+    }
+  }
+
+  // Try all possible response fields
+  const raw: Array<Record<string, unknown>> = json.contacts ?? json.people ?? json.matches ?? []
 
   const people: ApolloPerson[] = raw.map((c) => ({
     id: (c.id as string) ?? '',
@@ -93,7 +109,7 @@ async function apolloSearchPeople(
     phone_numbers: c.phone_numbers as ApolloPerson['phone_numbers'],
   }))
 
-  console.log(`[apollo] Found ${people.length} contacts for org ${orgId}`)
+  console.log(`[apollo] Mapped ${people.length} contacts for org ${orgId}`)
 
   // If reveal emails is enabled, enrich each person via /people/match
   if (revealEmails && people.length > 0) {
