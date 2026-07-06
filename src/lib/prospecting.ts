@@ -222,7 +222,7 @@ async function attioSetListEntryContact(
       body: JSON.stringify({
         data: {
           values: {
-            contact: [{ target: 'people', id: { record_id: personRecordId } }],
+            main_point_of_contact: [{ target: 'people', id: { record_id: personRecordId } }],
           },
         },
       }),
