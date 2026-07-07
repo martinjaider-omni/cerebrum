@@ -1,3 +1,5 @@
+import { compute, PLANS } from './pricing'
+
 export interface LandingProposal {
   clientName: string
   clientUrl: string
@@ -5,10 +7,15 @@ export interface LandingProposal {
   clientContact: string
   channelOnline: boolean
   channelStore: boolean
+  ordersOnline: number
+  ordersOffline: number
+  offlineRegPct: number
+  activityFactor: number
   techEcommerce: string
   techPos: string
   techCrm: string
   features: string[]
+  implPace: 'rapida' | 'estandar' | 'holgada'
   brandPrimary: string
   brandSecondary: string
   brandLogoUrl: string | null
@@ -145,6 +152,43 @@ function buildObjective(proposal: LandingProposal): string {
   return objective
 }
 
+function buildPricingSection(proposal: LandingProposal): string {
+  const result = compute({
+    ordersOnline: proposal.ordersOnline,
+    ordersOffline: proposal.ordersOffline,
+    offlineRegPct: proposal.offlineRegPct,
+    activityFactor: proposal.activityFactor,
+    channelOnline: proposal.channelOnline,
+    channelStore: proposal.channelStore,
+    techCrm: proposal.techCrm,
+    features: proposal.features,
+    implPace: proposal.implPace,
+  })
+
+  const plan = PLANS[result.recommendedPlanId as keyof typeof PLANS]
+  const lines: string[] = []
+
+  lines.push(`Plan recomendado: ${plan?.name ?? result.recommendedPlanId}`)
+  lines.push(`Cuota base: ${plan?.base ?? 0} EUR/mes`)
+  lines.push(`Actividades estimadas: ${result.activitiesPerMonth.toLocaleString('es-ES')}/mes`)
+  lines.push(`Coste mensual total: ${result.monthlyCost.toLocaleString('es-ES', { maximumFractionDigits: 0 })} EUR/mes`)
+  lines.push(`Coste anual: ${result.annualCost.toLocaleString('es-ES', { maximumFractionDigits: 0 })} EUR/año`)
+
+  if (result.tieredBreakdown.length > 0) {
+    lines.push(`Desglose por tramos:`)
+    for (const tier of result.tieredBreakdown) {
+      lines.push(`  - ${tier.label}: ${tier.units.toLocaleString('es-ES')} × ${tier.price} EUR = ${tier.subtotal.toLocaleString('es-ES')} EUR`)
+    }
+  }
+
+  if (proposal.enterpriseEnabled) {
+    const fee = proposal.enterpriseMonthlyFee ?? result.suggestedEnterpriseFee
+    lines.push(`Alternativa Enterprise: ${fee} EUR/mes (cuota fija, 12 meses)`)
+  }
+
+  return lines.join('\n')
+}
+
 function buildContent(proposal: LandingProposal): string {
   const lines: string[] = []
 
@@ -152,7 +196,7 @@ function buildContent(proposal: LandingProposal): string {
 
   const featureList = buildFeatureList(proposal.features)
   if (featureList) {
-    lines.push(`- Funcionalidades clave: ${featureList}`)
+    lines.push(`- Funcionalidades incluidas (SOLO ESTAS, no inventar otras): ${featureList}`)
   }
 
   const techStack = buildTechStackDescription(proposal)
@@ -167,13 +211,6 @@ function buildContent(proposal: LandingProposal): string {
     lines.push(`- Beneficios por canal: ${channelBenefits.join('/')}`)
   }
 
-  if (proposal.enterpriseEnabled) {
-    const feeNote = proposal.enterpriseMonthlyFee
-      ? ` (${proposal.enterpriseMonthlyFee} EUR/mes)`
-      : ''
-    lines.push(`- Incluir opción Enterprise con fee fijo${feeNote}`)
-  }
-
   if (proposal.message && proposal.message.trim()) {
     lines.push(`- Resumen ejecutivo: ${proposal.message.trim()}`)
   }
@@ -186,7 +223,7 @@ export function generateLandingPrompt(proposal: LandingProposal): string {
   const secondary = proposal.brandSecondary || '#255664'
   const channel = buildChannelLabel(proposal.channelOnline, proposal.channelStore)
 
-  const tema = `una propuesta de fidelización ${channel} para ${proposal.clientName} (sector ${proposal.clientSector})`
+  const tema = `una propuesta comercial de fidelización ${channel} para ${proposal.clientName} (sector ${proposal.clientSector})`
 
   return `Crea una landing page HTML completa y autocontenida para ${tema}.
 
@@ -194,7 +231,7 @@ REQUISITOS TÉCNICOS:
 1. HTML completo con <!DOCTYPE html>, <head> y <body>
 2. Todos los CSS dentro de etiquetas <style>
 3. NO usar archivos CSS externos (excepto Google Fonts y FontAwesome)
-4. Paleta de colores:
+4. Paleta de colores Omniwallet:
    - Primary: ${primary}
    - Primary Dark: ${secondary}
    - Dark: #232323
@@ -206,14 +243,24 @@ REQUISITOS TÉCNICOS:
 9. NO incluir header ni footer (el sistema los añade)
 10. Usar scroll-behavior: smooth
 11. AISLAMIENTO CSS (MUY IMPORTANTE):
-    - Todas las clases CSS DEBEN usar el prefijo "lp-"
-    - NUNCA uses clases genéricas sin prefijo
-    - Los estilos se renderizan dentro de #lp-content
+    - Todas las clases CSS DEBEN usar el prefijo "lp-" (ejemplo: lp-hero, lp-btn, lp-section, lp-card, lp-container, lp-grid, lp-footer-cta)
+    - NUNCA uses clases genéricas sin prefijo como: btn, btn-primary, btn-outline, container, section, card, logo, nav, header, footer, hero, grid, row, col
+    - Los estilos de la landing se renderizan dentro de un contenedor aislado (#lp-content) y deben ser 100% autocontenidos
 
-ESTRUCTURA RECOMENDADA:
-- Hero Section (100vh, gradiente, animación de fondo)
-- 3-5 secciones con animaciones al scroll
-- Sección CTA final
+DISEÑO (MUY IMPORTANTE):
+- NO hagas un diseño genérico que parezca generado por IA
+- Personaliza el diseño para el sector "${proposal.clientSector}" y la marca "${proposal.clientName}"
+- Usa metáforas visuales y lenguaje específico del sector, no textos genéricos tipo "Bienvenido a la revolución digital"
+- Los textos deben ser concretos y relevantes para el negocio del cliente
+- Evita secciones de relleno: cada sección debe aportar información de valor
+- Usa las imágenes de los logos del stack tecnológico del cliente como prueba de integración real
+
+ESTRUCTURA:
+- Hero Section (100vh, gradiente con los colores de marca, animación de fondo)
+- 2-3 secciones mostrando las funcionalidades contratadas y cómo aplican al negocio del cliente
+- Sección de integraciones con logos del stack tecnológico
+- **OBLIGATORIO: Sección final de PROPUESTA ECONÓMICA** (debe ser la última sección visible, con diseño de tabla/card profesional)
+- Botón CTA de contacto al final
 
 ANIMACIONES:
 - Intersection Observer para scroll animations
@@ -221,18 +268,23 @@ ANIMACIONES:
 - Clase .visible para estado animado
 - Transiciones 0.6s-0.8s ease
 
-LOGOS DE SOFTWARE DISPONIBLES (usa <img> con los que correspondan):
+LOGOS DE SOFTWARE DISPONIBLES (usa <img> con los que correspondan al stack del cliente):
 ${buildRelevantLogos(proposal)}
+
+FUNCIONALIDADES CONTRATADAS (SOLO MOSTRAR ESTAS, no inventar ni añadir otras):
+${buildContent(proposal)}
+
+PROPUESTA ECONÓMICA (mostrar estos datos exactos en la sección final):
+${buildPricingSection(proposal)}
 
 NO INCLUIR:
 - Menús de navegación
 - Footer
 - Enlaces a archivos externos propios
 - Console.log ni código debug
+- Funcionalidades o módulos que NO estén en la lista de "FUNCIONALIDADES CONTRATADAS"
+- Textos genéricos de marketing sin relación con el cliente
 
 OBJETIVO DE LA LANDING:
-${buildObjective(proposal)}
-
-CONTENIDO A INCLUIR:
-${buildContent(proposal)}`
+${buildObjective(proposal)}`
 }
