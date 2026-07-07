@@ -260,7 +260,7 @@ async function attioUpsertCompany(
   token: string,
   name: string,
   domain: string
-): Promise<string | null> {
+): Promise<{ recordId: string | null; error?: string }> {
   // If no valid domain, match by name only
   const values: Record<string, unknown> = { name: [{ value: name }] }
   const matchingAttribute = domain && domain !== 'x.com' ? 'domains' : 'name'
@@ -268,22 +268,31 @@ async function attioUpsertCompany(
     values.domains = [{ domain }]
   }
 
+  const body = { matching_attribute: matchingAttribute, values }
+  console.log(`[attio] PUT companies/records:`, JSON.stringify(body))
+
   const res = await fetchWithRetry('https://api.attio.com/v2/objects/companies/records', {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ matching_attribute: matchingAttribute, values }),
+    body: JSON.stringify(body),
     signal: AbortSignal.timeout(15_000),
   })
   if (!res.ok) {
     const errorBody = await res.text().catch(() => '')
     console.error(`[attio] Company upsert failed (${res.status}): ${errorBody}`)
-    return null
+    // Try to extract readable error
+    try {
+      const parsed = JSON.parse(errorBody)
+      return { recordId: null, error: `HTTP ${res.status}: ${parsed.message ?? parsed.error ?? errorBody}` }
+    } catch {
+      return { recordId: null, error: `HTTP ${res.status}: ${errorBody.slice(0, 200)}` }
+    }
   }
   const json = await res.json()
-  return json.data?.id?.record_id ?? null
+  return { recordId: json.data?.id?.record_id ?? null }
 }
 
 async function attioAddToList(
@@ -450,7 +459,9 @@ async function _processBatchInner(batchId: string): Promise<void> {
 
       if (settings.attioAccessToken) {
         console.log(`[attio] Upserting company: ${org.name} (${domain})`)
-        attioCompanyId = await attioUpsertCompany(settings.attioAccessToken, org.name, domain)
+        const attioResult = await attioUpsertCompany(settings.attioAccessToken, org.name, domain)
+        attioCompanyId = attioResult.recordId
+        if (attioResult.error) console.error(`[attio] Company error: ${attioResult.error}`)
         console.log(`[attio] Company record ID: ${attioCompanyId}`)
         if (attioCompanyId && settings.attioListId) {
           attioListEntryId = await attioAddToList(settings.attioAccessToken, settings.attioListId, attioCompanyId)
@@ -578,15 +589,16 @@ export async function syncBatchToAttio(batchId: string): Promise<{
       // Upsert company
       const domain = company.domain || ''
       console.log(`[attio-sync] Upserting: ${company.inputName} (${domain})`)
-      const attioCompanyId = await attioUpsertCompany(
+      const attioResult = await attioUpsertCompany(
         settings.attioAccessToken,
         company.inputName,
         domain
       )
-      if (!attioCompanyId) {
-        syncErrors.push(`${company.inputName}: Attio rechazó la creación (ver logs del servidor)`)
+      if (!attioResult.recordId) {
+        syncErrors.push(`${company.inputName}: ${attioResult.error ?? 'Error desconocido'}`)
         continue
       }
+      const attioCompanyId = attioResult.recordId
       console.log(`[attio-sync] Company OK: ${attioCompanyId}`)
 
       // Add to list
