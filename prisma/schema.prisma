@@ -147,6 +147,7 @@ model ProspectCompany {
   batch           ProspectingBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
   inputName       String
   domain          String        @default("")
+  phone           String?
   apolloOrgId     String?
   attioCompanyId  String?
   attioListEntryId String?

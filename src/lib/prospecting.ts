@@ -1,4 +1,98 @@
 import { db } from './db'
+import * as cheerio from 'cheerio'
+
+// ── Phone scraping ───────────────────────────────────────────────────────────
+
+// Regex for phone numbers: international and Spanish formats
+const PHONE_REGEX = /(?:\+?\d{1,3}[-.\s]?)?\(?\d{2,4}\)?[-.\s]?\d{2,4}[-.\s]?\d{2,4}(?:[-.\s]?\d{1,4})?/g
+
+function cleanPhone(raw: string): string | null {
+  const digits = raw.replace(/\D/g, '')
+  // Must have 9-15 digits to be valid
+  if (digits.length < 9 || digits.length > 15) return null
+  // Return with + if it started with +
+  return raw.trim().startsWith('+') ? `+${digits}` : digits
+}
+
+async function scrapeCompanyPhone(domain: string): Promise<string | null> {
+  if (!domain || domain === 'x.com') return null
+
+  const baseUrl = `https://${domain}`
+  const pagesToTry = [
+    '/legal', '/aviso-legal', '/terminos', '/terminos-y-condiciones',
+    '/terms', '/terms-and-conditions', '/privacy', '/privacidad',
+    '/politica-de-privacidad', '/contact', '/contacto',
+    '/impressum', '/imprint', '/',
+  ]
+
+  for (const path of pagesToTry) {
+    try {
+      const res = await fetch(`${baseUrl}${path}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; OmniWallet-Bot/1.0)' },
+        signal: AbortSignal.timeout(8_000),
+        redirect: 'follow',
+      })
+      if (!res.ok) continue
+
+      const html = await res.text()
+      const $ = cheerio.load(html)
+
+      // Remove scripts/styles to avoid false positives
+      $('script, style, noscript').remove()
+      const text = $('body').text()
+
+      // Look for tel: links first (most reliable)
+      const telHref = $('a[href^="tel:"]').first().attr('href')
+      if (telHref) {
+        const phone = cleanPhone(telHref.replace('tel:', ''))
+        if (phone) {
+          console.log(`[scrape] Found phone via tel: link on ${domain}${path}: ${phone}`)
+          return phone
+        }
+      }
+
+      // Look for phone patterns near keywords
+      const phoneKeywords = /tel[éeè]fono|phone|tel\b|tfno|llamar|contact/i
+      const lines = text.split('\n').map((l) => l.trim()).filter(Boolean)
+      for (const line of lines) {
+        if (!phoneKeywords.test(line)) continue
+        const matches = line.match(PHONE_REGEX)
+        if (matches) {
+          for (const match of matches) {
+            const phone = cleanPhone(match)
+            if (phone) {
+              console.log(`[scrape] Found phone via keyword on ${domain}${path}: ${phone}`)
+              return phone
+            }
+          }
+        }
+      }
+
+      // Fallback: look in footer area
+      const footerText = $('footer, [class*="footer"], [id*="footer"]').text()
+      if (footerText) {
+        const matches = footerText.match(PHONE_REGEX)
+        if (matches) {
+          for (const match of matches) {
+            const phone = cleanPhone(match)
+            if (phone) {
+              console.log(`[scrape] Found phone in footer on ${domain}${path}: ${phone}`)
+              return phone
+            }
+          }
+        }
+      }
+    } catch {
+      // Page not found or timeout, try next
+      continue
+    }
+  }
+
+  console.log(`[scrape] No phone found for ${domain}`)
+  return null
+}
+
+// ── Fetch with retry ─────────────────────────────────────────────────────────
 
 async function fetchWithRetry(
   url: string,
@@ -302,7 +396,17 @@ export async function processBatch(batchId: string): Promise<void> {
 
       const domain = org.primary_domain ?? new URL(org.website_url || 'https://x.com').hostname
 
-      // 2. Find people in Apollo
+      // 2. Scrape company phone from website
+      let companyPhone: string | null = org.phone ?? null
+      if (!companyPhone) {
+        try {
+          companyPhone = await scrapeCompanyPhone(domain)
+        } catch {
+          // Non-critical: continue without phone
+        }
+      }
+
+      // 3. Find people in Apollo
       const apolloPeople = await apolloSearchPeople(
         settings.apolloApiKey,
         org.id,
@@ -326,6 +430,7 @@ export async function processBatch(batchId: string): Promise<void> {
         where: { id: company.id },
         data: {
           domain,
+          phone: companyPhone,
           apolloOrgId: org.id,
           attioCompanyId,
           attioListEntryId,

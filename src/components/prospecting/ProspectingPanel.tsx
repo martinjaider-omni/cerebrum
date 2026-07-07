@@ -30,6 +30,7 @@ interface Company {
   id: string
   inputName: string
   domain: string
+  phone: string | null
   status: string
   error: string | null
   people: Person[]
@@ -327,6 +328,7 @@ function BatchDetailPanel({ batchId, onClose }: { batchId: string; onClose: () =
                   <div className="flex-1 min-w-0">
                     <span className="font-medium text-sm text-gray-800">{co.inputName}</span>
                     {co.domain && <span className="ml-2 text-xs text-gray-400">{co.domain}</span>}
+                    {co.phone && <span className="ml-2 text-xs text-teal-600">📞 {co.phone}</span>}
                     {co.error && <span className="ml-2 text-xs text-red-500">{co.error}</span>}
                   </div>
                   <span className="text-xs text-gray-400 shrink-0">{co.people.length} persona{co.people.length !== 1 ? 's' : ''}</span>
