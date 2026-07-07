@@ -261,25 +261,35 @@ async function attioUpsertCompany(
   name: string,
   domain: string
 ): Promise<{ recordId: string | null; error?: string }> {
-  // If no valid domain, match by name only
   const values: Record<string, unknown> = { name: [{ value: name }] }
-  const matchingAttribute = domain && domain !== 'x.com' ? 'domains' : 'name'
-  if (domain && domain !== 'x.com') {
+  const hasDomain = domain && domain !== 'x.com' && domain !== ''
+
+  if (hasDomain) {
     values.domains = [{ domain }]
   }
 
   const body = { data: { values } }
-  console.log(`[attio] PUT companies/records?matching_attribute=${matchingAttribute}:`, JSON.stringify(body))
 
-  const res = await fetchWithRetry(`https://api.attio.com/v2/objects/companies/records?matching_attribute=${matchingAttribute}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(15_000),
-  })
+  let res: Response
+  if (hasDomain) {
+    // Upsert by domain (unique attribute)
+    console.log(`[attio] PUT companies/records?matching_attribute=domains:`, JSON.stringify(body))
+    res = await fetchWithRetry('https://api.attio.com/v2/objects/companies/records?matching_attribute=domains', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15_000),
+    })
+  } else {
+    // No domain — create directly (can't upsert without unique attribute)
+    console.log(`[attio] POST companies/records (no domain):`, JSON.stringify(body))
+    res = await fetchWithRetry('https://api.attio.com/v2/objects/companies/records', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15_000),
+    })
+  }
   if (!res.ok) {
     const errorBody = await res.text().catch(() => '')
     console.error(`[attio] Company upsert failed (${res.status}): ${errorBody}`)
