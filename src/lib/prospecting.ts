@@ -417,15 +417,20 @@ export async function processBatch(batchId: string): Promise<void> {
         settings.revealEmails
       )
 
-      // 3. Upsert to Attio (if configured)
+      // 4. Upsert to Attio (if configured)
       let attioCompanyId: string | null = null
       let attioListEntryId: string | null = null
 
       if (settings.attioAccessToken) {
+        console.log(`[attio] Upserting company: ${org.name} (${domain})`)
         attioCompanyId = await attioUpsertCompany(settings.attioAccessToken, org.name, domain)
+        console.log(`[attio] Company record ID: ${attioCompanyId}`)
         if (attioCompanyId && settings.attioListId) {
           attioListEntryId = await attioAddToList(settings.attioAccessToken, settings.attioListId, attioCompanyId)
+          console.log(`[attio] List entry ID: ${attioListEntryId}`)
         }
+      } else {
+        console.log(`[attio] Skipped — no access token configured`)
       }
 
       await db.prospectCompany.update({
@@ -453,13 +458,14 @@ export async function processBatch(batchId: string): Promise<void> {
 
         let attioPersonId: string | null = null
         if (settings.attioAccessToken && person.email) {
-          // Upsert person linked to company
+          console.log(`[attio] Upserting person: ${person.name} (${person.email})`)
           attioPersonId = await attioUpsertPerson(
             settings.attioAccessToken,
             person.name,
             person.email ? [person.email] : [],
             attioCompanyId
           )
+          console.log(`[attio] Person record ID: ${attioPersonId}`)
 
           // Set first contact as main contact on the list entry
           if (attioPersonId && attioListEntryId && isFirstContact && settings.attioListId) {
@@ -470,11 +476,14 @@ export async function processBatch(batchId: string): Promise<void> {
                 attioListEntryId,
                 attioPersonId
               )
-            } catch {
-              // Non-critical: list entry contact attribute may not exist
+              console.log(`[attio] Set main contact on list entry: ${attioPersonId}`)
+            } catch (err) {
+              console.error(`[attio] Failed to set main contact:`, err instanceof Error ? err.message : err)
             }
             isFirstContact = false
           }
+        } else if (settings.attioAccessToken && !person.email) {
+          console.log(`[attio] Skipped person ${person.name} — no email for matching`)
         }
 
         await db.prospectPerson.create({
@@ -514,4 +523,100 @@ export async function processBatch(batchId: string): Promise<void> {
       counts: { companies: processed, people: totalPeople, phones: totalPhones, errors },
     },
   })
+}
+
+// ── Manual Attio sync ────────────────────────────────────────────────────────
+
+export async function syncBatchToAttio(batchId: string): Promise<{
+  companiesSynced: number
+  peopleSynced: number
+  contactsSet: number
+  errors: string[]
+}> {
+  const settings = await db.integrationSettings.findFirst()
+  if (!settings?.attioAccessToken) throw new Error('Attio access token not configured')
+
+  const companies = await db.prospectCompany.findMany({
+    where: { batchId, status: 'done' },
+    include: { people: { where: { status: 'done' } } },
+  })
+
+  let companiesSynced = 0
+  let peopleSynced = 0
+  let contactsSet = 0
+  const syncErrors: string[] = []
+
+  for (const company of companies) {
+    try {
+      // Upsert company
+      const domain = company.domain || ''
+      const attioCompanyId = await attioUpsertCompany(
+        settings.attioAccessToken,
+        company.inputName,
+        domain
+      )
+      if (!attioCompanyId) {
+        syncErrors.push(`${company.inputName}: no se pudo crear en Attio`)
+        continue
+      }
+
+      // Add to list
+      let attioListEntryId: string | null = null
+      if (settings.attioListId) {
+        attioListEntryId = await attioAddToList(
+          settings.attioAccessToken,
+          settings.attioListId,
+          attioCompanyId
+        )
+      }
+
+      // Update local record
+      await db.prospectCompany.update({
+        where: { id: company.id },
+        data: { attioCompanyId, attioListEntryId },
+      })
+      companiesSynced++
+
+      // Upsert people
+      let isFirstContact = true
+      for (const person of company.people) {
+        if (person.emails.length === 0) continue
+
+        const attioPersonId = await attioUpsertPerson(
+          settings.attioAccessToken,
+          person.fullName,
+          person.emails,
+          attioCompanyId
+        )
+
+        if (attioPersonId) {
+          await db.prospectPerson.update({
+            where: { id: person.id },
+            data: { attioPersonId },
+          })
+          peopleSynced++
+
+          // Set first contact as main point of contact
+          if (attioListEntryId && isFirstContact && settings.attioListId) {
+            try {
+              await attioSetListEntryContact(
+                settings.attioAccessToken,
+                settings.attioListId,
+                attioListEntryId,
+                attioPersonId
+              )
+              contactsSet++
+            } catch {
+              // Non-critical
+            }
+            isFirstContact = false
+          }
+        }
+      }
+    } catch (err) {
+      syncErrors.push(`${company.inputName}: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
+  return { companiesSynced, peopleSynced, contactsSet, errors: syncErrors }
 }

@@ -234,10 +234,20 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
 
 // ── Batch detail view ──────────────────────────────────────────────────────────
 
+interface SyncResult {
+  companiesSynced: number
+  peopleSynced: number
+  contactsSet: number
+  errors: string[]
+}
+
 function BatchDetailPanel({ batchId, onClose }: { batchId: string; onClose: () => void }) {
   const [batch, setBatch] = useState<BatchDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [retrying, setRetrying] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [syncResult, setSyncResult] = useState<SyncResult | null>(null)
+  const [syncError, setSyncError] = useState<string | null>(null)
 
   const load = useCallback(() => {
     fetch(`/api/prospecting/batches/${batchId}`)
@@ -247,6 +257,7 @@ function BatchDetailPanel({ batchId, onClose }: { batchId: string; onClose: () =
 
   async function handleRetry() {
     setRetrying(true)
+    setSyncResult(null)
     try {
       const res = await fetch(`/api/prospecting/batches/${batchId}/retry`, { method: 'POST' })
       if (res.ok) {
@@ -255,6 +266,22 @@ function BatchDetailPanel({ batchId, onClose }: { batchId: string; onClose: () =
       }
     } finally {
       setRetrying(false)
+    }
+  }
+
+  async function handleSyncAttio() {
+    setSyncing(true)
+    setSyncResult(null)
+    setSyncError(null)
+    try {
+      const res = await fetch(`/api/prospecting/batches/${batchId}/sync-attio`, { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Error sincronizando')
+      setSyncResult(json)
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : 'Error')
+    } finally {
+      setSyncing(false)
     }
   }
 
@@ -287,13 +314,22 @@ function BatchDetailPanel({ batchId, onClose }: { batchId: string; onClose: () =
           )}
         </div>
         <div className="flex items-center gap-2">
+          {batch && batch.status === 'done' && (
+            <button
+              onClick={handleSyncAttio}
+              disabled={syncing}
+              className="px-3 py-1.5 text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-50"
+            >
+              {syncing ? 'Sincronizando…' : '📤 Enviar a Attio'}
+            </button>
+          )}
           {batch && (batch.status === 'error' || batch.status === 'done') && (
             <button
               onClick={handleRetry}
               disabled={retrying}
               className="px-3 py-1.5 text-xs font-medium bg-orange-50 text-orange-700 border border-orange-200 rounded-lg hover:bg-orange-100 transition-colors disabled:opacity-50"
             >
-              {retrying ? 'Reintentando…' : '🔄 Reintentar fallidos'}
+              {retrying ? 'Reintentando…' : '🔄 Reintentar'}
             </button>
           )}
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-sm">✕ Cerrar</button>
@@ -317,6 +353,25 @@ function BatchDetailPanel({ batchId, onClose }: { batchId: string; onClose: () =
               </div>
             ))}
           </div>
+
+          {/* Attio sync result */}
+          {syncResult && (
+            <div className="px-5 py-3 border-b border-gray-100 bg-green-50">
+              <p className="text-sm font-medium text-green-800">
+                ✅ Sincronizado: {syncResult.companiesSynced} empresa{syncResult.companiesSynced !== 1 ? 's' : ''}, {syncResult.peopleSynced} persona{syncResult.peopleSynced !== 1 ? 's' : ''}, {syncResult.contactsSet} contacto{syncResult.contactsSet !== 1 ? 's' : ''} asignado{syncResult.contactsSet !== 1 ? 's' : ''}
+              </p>
+              {syncResult.errors.length > 0 && (
+                <div className="mt-1 text-xs text-orange-700">
+                  {syncResult.errors.map((e, i) => <p key={i}>⚠ {e}</p>)}
+                </div>
+              )}
+            </div>
+          )}
+          {syncError && (
+            <div className="px-5 py-3 border-b border-gray-100 bg-red-50">
+              <p className="text-sm text-red-700">❌ {syncError}</p>
+            </div>
+          )}
 
           <div className="overflow-auto max-h-[60vh]">
             {batch.companies.map((co) => (
