@@ -253,6 +253,7 @@ function BatchDetailPanel({ batchId, onClose }: { batchId: string; onClose: () =
     fetch(`/api/prospecting/batches/${batchId}`)
       .then((r) => r.json())
       .then((d) => { setBatch(d); setLoading(false) })
+      .catch(() => { setLoading(false) })
   }, [batchId])
 
   async function handleRetry() {

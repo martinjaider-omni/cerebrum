@@ -361,6 +361,21 @@ async function attioSetListEntryContact(
 // ── Batch processor ────────────────────────────────────────────────────────────
 
 export async function processBatch(batchId: string): Promise<void> {
+  try {
+    await _processBatchInner(batchId)
+  } catch (err) {
+    console.error(`[prospecting] Fatal error in batch ${batchId}:`, err)
+    await db.prospectingBatch.update({
+      where: { id: batchId },
+      data: {
+        status: 'error',
+        counts: { companies: 0, people: 0, phones: 0, errors: 1 },
+      },
+    }).catch(() => {})
+  }
+}
+
+async function _processBatchInner(batchId: string): Promise<void> {
   const settings = await db.integrationSettings.findFirst()
   if (!settings?.apolloApiKey) throw new Error('Apollo API key not configured')
 
