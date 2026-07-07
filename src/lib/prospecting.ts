@@ -268,7 +268,7 @@ async function attioUpsertCompany(
     values.domains = [{ domain }]
   }
 
-  const body = { matching_attribute: matchingAttribute, values }
+  const body = { matching_attribute: matchingAttribute, data: { values } }
   console.log(`[attio] PUT companies/records:`, JSON.stringify(body))
 
   const res = await fetchWithRetry('https://api.attio.com/v2/objects/companies/records', {
@@ -344,7 +344,7 @@ async function attioUpsertPerson(
     },
     body: JSON.stringify({
       matching_attribute: 'email_addresses',
-      values,
+      data: { values },
     }),
     signal: AbortSignal.timeout(15_000),
   })
