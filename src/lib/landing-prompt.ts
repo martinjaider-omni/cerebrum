@@ -21,6 +21,7 @@ export interface LandingProposal {
   brandPrimary: string
   brandSecondary: string
   brandLogoUrl: string | null
+  notes: string
   message: string
   dualPlanEnabled: boolean
   dualPlanFeatures: string[]
@@ -311,5 +312,8 @@ NO INCLUIR:
 - Textos genéricos de marketing sin relación con el cliente
 
 OBJETIVO DE LA LANDING:
-${buildObjective(proposal)}`
+${buildObjective(proposal)}${proposal.notes?.trim() ? `
+
+NOTAS DE LA DEMO / CONTEXTO ADICIONAL (usa esta información para personalizar el contenido):
+${proposal.notes.trim()}` : ''}`
 }

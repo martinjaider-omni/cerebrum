@@ -55,6 +55,7 @@ model Proposal {
   brandPrimary  String       @default("#3E95B0")
   brandSecondary String      @default("#255664")
   brandPalette  String[]
+  notes         String       @default("")
   message       String       @default("")
   overrides     Json         @default("{}")
   computed      Json         @default("{}")
@@ -92,6 +93,7 @@ enum AssetKind {
   image
   pdf
   docx
+  notes
   logo
 }
 

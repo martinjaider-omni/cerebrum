@@ -32,6 +32,7 @@ const updateSchema = z.object({
   brandPrimary: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   brandSecondary: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   brandPalette: z.array(z.string().regex(/^#[0-9a-fA-F]{6}$/)),
+  notes: z.string().max(10000),
   message: z.string().max(5000),
   overrides: z.record(z.unknown()),
   computed: z.record(z.unknown()),

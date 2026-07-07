@@ -133,6 +133,7 @@ interface ProposalData {
   brandPrimary: string
   brandSecondary: string
   brandPalette: string[]
+  notes: string
   message: string
 }
 
@@ -196,6 +197,10 @@ export function ProposalEditor({ initial }: { initial: ProposalData }) {
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [shareLoading, setShareLoading] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [assets, setAssets] = useState<Array<{ id: string; filename: string; kind: string; url?: string }>>([])
+  const [assetUploading, setAssetUploading] = useState(false)
+  const [assetError, setAssetError] = useState<string | null>(null)
+  const assetInputId = useId()
 
   // ── Autosave ───────────────────────────────────────────────────────────────
 
@@ -241,6 +246,44 @@ export function ProposalEditor({ initial }: { initial: ProposalData }) {
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)
   }, [saveState])
+
+  // Load assets on mount
+  useEffect(() => {
+    fetch(`/api/proposals/${initial.id}/assets`)
+      .then((r) => r.json())
+      .then((list) => { if (Array.isArray(list)) setAssets(list) })
+      .catch(() => {})
+  }, [initial.id])
+
+  async function handleAssetUpload(file: File) {
+    setAssetUploading(true)
+    setAssetError(null)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch(`/api/proposals/${data.id}/assets`, { method: 'POST', body: form })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Error subiendo archivo')
+      setAssets((prev) => [json, ...prev])
+
+      // If it's a text file, append content to notes
+      if (file.type === 'text/plain' || file.type === 'text/markdown' || file.name.endsWith('.txt') || file.name.endsWith('.md')) {
+        const text = await file.text()
+        if (text.trim()) {
+          update({ notes: (data.notes ? data.notes + '\n\n' : '') + `--- ${file.name} ---\n${text.trim()}` })
+        }
+      }
+    } catch (err) {
+      setAssetError(err instanceof Error ? err.message : 'Error')
+    } finally {
+      setAssetUploading(false)
+    }
+  }
+
+  async function handleAssetDelete(assetId: string) {
+    await fetch(`/api/assets/${assetId}`, { method: 'DELETE' })
+    setAssets((prev) => prev.filter((a) => a.id !== assetId))
+  }
 
   const toggleFeature = (id: string) => {
     update({
@@ -802,10 +845,64 @@ export function ProposalEditor({ initial }: { initial: ProposalData }) {
           )}
         </Section>
 
-        {/* 9. Recursos — placeholder */}
-        <Section title="9. Recursos (imágenes y adjuntos)">
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center text-gray-400">
-            <p className="text-sm">Subida de archivos adicionales disponible en fases futuras.</p>
+        {/* 9. Notas y archivos */}
+        <Section title="9. Notas de la demo y archivos">
+          <Field label="Notas de la demo / briefing" hint="(se usan para personalizar la propuesta y el prompt HTML)">
+            <textarea
+              className={`${inputCls} h-36 resize-none font-mono text-xs`}
+              value={data.notes}
+              onChange={(e) => update({ notes: e.target.value })}
+              placeholder="Apuntes de la demo, necesidades del cliente, puntos clave comentados..."
+            />
+          </Field>
+
+          {/* File upload */}
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <label
+                htmlFor={assetInputId}
+                className={`inline-flex items-center gap-2 text-sm px-4 py-2 rounded-lg border border-gray-300 text-gray-700 cursor-pointer hover:bg-gray-50 transition-colors ${assetUploading ? 'opacity-50 pointer-events-none' : ''}`}
+              >
+                {assetUploading ? 'Subiendo…' : '📎 Adjuntar archivo'}
+              </label>
+              <input
+                id={assetInputId}
+                type="file"
+                accept=".pdf,.docx,.txt,.md,.csv,.json,.png,.jpg,.jpeg,.webp,.gif,.svg"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) { handleAssetUpload(file); e.target.value = '' }
+                }}
+              />
+              <span className="text-xs text-gray-400">PDF, DOCX, TXT, MD, CSV, imágenes (max 10 MB)</span>
+            </div>
+            <p className="text-xs text-gray-400 mb-2">Los archivos .txt y .md se añaden automáticamente a las notas.</p>
+
+            {assetError && (
+              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-2">
+                {assetError}
+              </div>
+            )}
+
+            {assets.length > 0 && (
+              <div className="space-y-1">
+                {assets.map((a) => (
+                  <div key={a.id} className="flex items-center gap-3 text-sm bg-gray-50 rounded-lg px-3 py-2">
+                    <span className="text-gray-400">
+                      {a.kind === 'image' ? '🖼' : a.kind === 'pdf' ? '📄' : a.kind === 'notes' ? '📝' : '📎'}
+                    </span>
+                    <span className="flex-1 truncate text-gray-700">{a.filename}</span>
+                    <button
+                      onClick={() => handleAssetDelete(a.id)}
+                      className="text-xs text-red-400 hover:text-red-600 shrink-0"
+                    >
+                      Eliminar
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </Section>
 

@@ -12,6 +12,10 @@ const ALLOWED_TYPES: Record<string, string> = {
   'image/svg+xml': 'image',
   'application/pdf': 'pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'text/plain': 'notes',
+  'text/markdown': 'notes',
+  'text/csv': 'notes',
+  'application/json': 'notes',
 }
 const MAX_BYTES = 10 * 1024 * 1024 // 10 MB
 
