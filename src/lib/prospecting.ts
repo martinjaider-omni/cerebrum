@@ -261,19 +261,27 @@ async function attioUpsertCompany(
   name: string,
   domain: string
 ): Promise<string | null> {
+  // If no valid domain, match by name only
+  const values: Record<string, unknown> = { name: [{ value: name }] }
+  const matchingAttribute = domain && domain !== 'x.com' ? 'domains' : 'name'
+  if (domain && domain !== 'x.com') {
+    values.domains = [{ domain }]
+  }
+
   const res = await fetchWithRetry('https://api.attio.com/v2/objects/companies/records', {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({
-      matching_attribute: 'domains',
-      values: { name: [{ value: name }], domains: domain ? [{ domain }] : [] },
-    }),
+    body: JSON.stringify({ matching_attribute: matchingAttribute, values }),
     signal: AbortSignal.timeout(15_000),
   })
-  if (!res.ok) return null
+  if (!res.ok) {
+    const errorBody = await res.text().catch(() => '')
+    console.error(`[attio] Company upsert failed (${res.status}): ${errorBody}`)
+    return null
+  }
   const json = await res.json()
   return json.data?.id?.record_id ?? null
 }
@@ -294,7 +302,11 @@ async function attioAddToList(
     }),
     signal: AbortSignal.timeout(15_000),
   })
-  if (!res.ok) return null
+  if (!res.ok) {
+    const errorBody = await res.text().catch(() => '')
+    console.error(`[attio] Add to list failed (${res.status}): ${errorBody}`)
+    return null
+  }
   const json = await res.json()
   return json.data?.id?.entry_id ?? null
 }
@@ -565,15 +577,17 @@ export async function syncBatchToAttio(batchId: string): Promise<{
     try {
       // Upsert company
       const domain = company.domain || ''
+      console.log(`[attio-sync] Upserting: ${company.inputName} (${domain})`)
       const attioCompanyId = await attioUpsertCompany(
         settings.attioAccessToken,
         company.inputName,
         domain
       )
       if (!attioCompanyId) {
-        syncErrors.push(`${company.inputName}: no se pudo crear en Attio`)
+        syncErrors.push(`${company.inputName}: Attio rechazó la creación (ver logs del servidor)`)
         continue
       }
+      console.log(`[attio-sync] Company OK: ${attioCompanyId}`)
 
       // Add to list
       let attioListEntryId: string | null = null
