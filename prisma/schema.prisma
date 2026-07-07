@@ -172,6 +172,7 @@ model ProspectPerson {
   fullName      String
   title         String        @default("")
   seniority     String        @default("")
+  linkedinUrl   String?
   emails        String[]
   personalPhone String?
   companyPhone  String?

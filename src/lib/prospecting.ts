@@ -124,6 +124,7 @@ interface ApolloPerson {
   title: string
   seniority: string
   email: string | null
+  linkedin_url: string | null
   organization_id: string
   phone_numbers?: Array<{ raw_number: string; type: string }>
 }
@@ -199,6 +200,7 @@ async function apolloSearchPeople(
     title: (c.title as string) ?? '',
     seniority: (c.seniority as string) ?? '',
     email: (c.email as string) ?? null,
+    linkedin_url: (c.linkedin_url as string) ?? null,
     organization_id: (c.organization_id as string) ?? orgId,
     phone_numbers: c.phone_numbers as ApolloPerson['phone_numbers'],
   }))
@@ -482,6 +484,7 @@ export async function processBatch(batchId: string): Promise<void> {
             fullName: person.name,
             title: person.title ?? '',
             seniority: person.seniority ?? '',
+            linkedinUrl: person.linkedin_url,
             emails: person.email ? [person.email] : [],
             personalPhone,
             phoneStatus,

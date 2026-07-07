@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   FilePlus,
   Users,
+  BookUser,
   Shield,
   LogOut,
 } from 'lucide-react'
@@ -16,6 +17,7 @@ const baseLinks = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/proposals/new', label: 'Nueva Propuesta', icon: FilePlus },
   { href: '/prospecting', label: 'Prospección', icon: Users },
+  { href: '/directory', label: 'Directorio', icon: BookUser },
 ]
 
 const adminLink = { href: '/admin', label: 'Admin', icon: Shield }

@@ -28,6 +28,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <a href="/prospecting" className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-200 hover:bg-white/10 transition-colors">
             <span aria-hidden="true">🔍</span> Prospección
           </a>
+          <a href="/directory" className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-200 hover:bg-white/10 transition-colors">
+            <span aria-hidden="true">👥</span> Directorio
+          </a>
           {isAdmin && (
             <a href="/admin" className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-200 hover:bg-white/10 transition-colors">
               <span aria-hidden="true">⚙️</span> Admin
