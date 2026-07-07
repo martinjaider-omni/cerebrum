@@ -30,6 +30,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     techCrm: proposal.techCrm,
     features: proposal.features as string[],
     implPace: proposal.implPace as 'rapida' | 'estandar' | 'holgada',
+    dualPlanEnabled: (proposal as Record<string, unknown>).dualPlanEnabled as boolean ?? false,
+    dualPlanFeatures: (proposal as Record<string, unknown>).dualPlanFeatures as string[] ?? [],
     brandPrimary: proposal.brandPrimary,
     brandSecondary: proposal.brandSecondary,
     brandLogoUrl: proposal.brandLogoUrl,

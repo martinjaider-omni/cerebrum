@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useRef, useState, useId } from 'react'
 import { useRouter } from 'next/navigation'
 import { SummaryPanel } from './SummaryPanel'
-import { FEATURE_PLAN_MAP, PLANS } from '@/lib/pricing'
+import { FEATURE_PLAN_MAP, PLANS, recommendPlan } from '@/lib/pricing'
+
+const PLAN_ORDER = ['starter', 'plus', 'advanced', 'enterprise'] as const
 
 // ── Catalog data (mirrors seed — in Phase 6 admin can edit these via DB) ──────
 
@@ -121,6 +123,8 @@ interface ProposalData {
   techCrm: string
   features: string[]
   implPace: 'rapida' | 'estandar' | 'holgada'
+  dualPlanEnabled: boolean
+  dualPlanFeatures: string[]
   enterpriseEnabled: boolean
   enterpriseMonthlyFee: number | null
   enterpriseTerm: string
@@ -644,8 +648,99 @@ export function ProposalEditor({ initial }: { initial: ProposalData }) {
           </div>
         </Section>
 
-        {/* 6. Tipo de implementación — SOLO USO INTERNO */}
-        <Section title="6. Tipo de implementación">
+        {/* 6. Comparativa de planes */}
+        <Section title="6. Comparativa de planes">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <div
+              onClick={() => update({ dualPlanEnabled: !data.dualPlanEnabled, dualPlanFeatures: data.dualPlanFeatures ?? [] })}
+              className={`w-10 h-6 rounded-full transition-colors relative cursor-pointer ${data.dualPlanEnabled ? 'bg-teal-500' : 'bg-gray-300'}`}
+            >
+              <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${data.dualPlanEnabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
+            </div>
+            <span className="text-sm font-medium">Mostrar dos opciones de plan al cliente</span>
+          </label>
+          <p className="text-xs text-gray-400">
+            Presenta la propuesta base junto a un plan superior con más funcionalidades para que el cliente pueda comparar.
+          </p>
+
+          {data.dualPlanEnabled && (() => {
+            const { planId: basePlan } = recommendPlan(data.features)
+            const basePlanIdx = PLAN_ORDER.indexOf(basePlan as typeof PLAN_ORDER[number])
+            const upgradePlanId = basePlanIdx < PLAN_ORDER.length - 1 ? PLAN_ORDER[basePlanIdx + 1] : null
+            const upgradePlan = upgradePlanId ? PLANS[upgradePlanId as keyof typeof PLANS] : null
+
+            if (!upgradePlan) return (
+              <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-500">
+                Ya estás en el plan más alto disponible (Enterprise).
+              </div>
+            )
+
+            // Features available in the upgrade plan but not in current selection
+            const upgradeFeatures = Object.entries(FEATURE_PLAN_MAP)
+              .filter(([, plan]) => plan === upgradePlanId)
+              .map(([id]) => id)
+              .filter((id) => !data.features.includes(id))
+
+            const allUpgradeFeatures = Object.entries(FEATURE_PLAN_MAP)
+              .filter(([, plan]) => plan === upgradePlanId)
+              .map(([id]) => id)
+
+            return (
+              <div className="space-y-3 mt-2">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <p className="text-xs font-semibold text-gray-500 uppercase">Opción A — Base</p>
+                    <p className="text-lg font-bold text-gray-900 mt-1">{PLANS[basePlan as keyof typeof PLANS]?.name}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{data.features.length} funcionalidades seleccionadas</p>
+                  </div>
+                  <div className="bg-teal-50 rounded-lg p-4 border border-teal-200">
+                    <p className="text-xs font-semibold text-teal-600 uppercase">Opción B — Superior</p>
+                    <p className="text-lg font-bold text-gray-900 mt-1">{upgradePlan.name}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{data.features.length + (data.dualPlanFeatures?.length ?? 0)} funcionalidades</p>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    Funcionalidades adicionales en {upgradePlan.name} (selecciona las que incluir)
+                  </p>
+                  <div className="grid grid-cols-2 gap-1">
+                    {allUpgradeFeatures.map((featId) => {
+                      const feat = FEATURES_CATALOG.flatMap((c) => c.items).find((f) => f.id === featId)
+                      if (!feat) return null
+                      const alreadyInBase = data.features.includes(featId)
+                      const checked = alreadyInBase || (data.dualPlanFeatures ?? []).includes(featId)
+                      return (
+                        <label key={featId} className={`flex items-center gap-2 py-1 px-2 rounded ${alreadyInBase ? 'opacity-50' : 'cursor-pointer hover:bg-gray-50'}`}>
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 accent-teal-600 shrink-0"
+                            checked={checked}
+                            disabled={alreadyInBase}
+                            onChange={() => {
+                              if (alreadyInBase) return
+                              const current = data.dualPlanFeatures ?? []
+                              update({
+                                dualPlanFeatures: current.includes(featId)
+                                  ? current.filter((f) => f !== featId)
+                                  : [...current, featId],
+                              })
+                            }}
+                          />
+                          <span className="text-sm text-gray-700">{feat.name}</span>
+                          {alreadyInBase && <span className="text-xs text-gray-400">(ya incluida)</span>}
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
+        </Section>
+
+        {/* 7. Tipo de implementación — SOLO USO INTERNO */}
+        <Section title="7. Tipo de implementación">
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-3">
             <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">⚠ Solo uso interno — no se muestra al cliente</p>
             <p className="text-xs text-slate-500 mt-0.5">Ajusta los tiempos del roadmap. El cliente solo ve las semanas resultantes.</p>
@@ -668,8 +763,8 @@ export function ProposalEditor({ initial }: { initial: ProposalData }) {
           </div>
         </Section>
 
-        {/* 7. Alternativa Enterprise */}
-        <Section title="7. Alternativa Enterprise (cuota fija)">
+        {/* 8. Alternativa Enterprise */}
+        <Section title="8. Alternativa Enterprise (cuota fija)">
           <label className="flex items-center gap-3 cursor-pointer">
             <div
               onClick={() => update({ enterpriseEnabled: !data.enterpriseEnabled })}
@@ -707,15 +802,15 @@ export function ProposalEditor({ initial }: { initial: ProposalData }) {
           )}
         </Section>
 
-        {/* 8. Recursos — placeholder */}
-        <Section title="8. Recursos (imágenes y adjuntos)">
+        {/* 9. Recursos — placeholder */}
+        <Section title="9. Recursos (imágenes y adjuntos)">
           <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center text-gray-400">
             <p className="text-sm">Subida de archivos adicionales disponible en fases futuras.</p>
           </div>
         </Section>
 
-        {/* 9. Mensaje personalizado */}
-        <Section title="9. Mensaje personalizado">
+        {/* 10. Mensaje personalizado */}
+        <Section title="10. Mensaje personalizado">
           <Field label="Resumen ejecutivo" hint="(aparece en la propuesta del cliente)">
             <textarea
               className={`${inputCls} h-28 resize-none`}
@@ -726,8 +821,8 @@ export function ProposalEditor({ initial }: { initial: ProposalData }) {
           </Field>
         </Section>
 
-        {/* 10. Compartir */}
-        <Section title="10. Compartir propuesta">
+        {/* 11. Compartir */}
+        <Section title="11. Compartir propuesta">
           <div className="space-y-3">
             <p className="text-sm text-gray-600">
               Genera un link público de solo lectura para enviar al cliente. El cliente podrá ver la propuesta y descargar el PDF sin necesidad de iniciar sesión.

@@ -45,6 +45,8 @@ model Proposal {
   techCrm       String       @default("")
   features      String[]
   implPace      ImplPace     @default(estandar)
+  dualPlanEnabled Boolean      @default(false)
+  dualPlanFeatures String[]
   enterpriseEnabled   Boolean  @default(false)
   enterpriseMonthlyFee Int?
   enterpriseTerm  String     @default("12 meses")

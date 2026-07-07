@@ -1,4 +1,6 @@
-import { compute, PLANS } from './pricing'
+import { compute, PLANS, recommendPlan, calcActivities, calcMonthlyCost } from './pricing'
+
+const PLAN_ORDER = ['starter', 'plus', 'advanced', 'enterprise'] as const
 
 export interface LandingProposal {
   clientName: string
@@ -20,6 +22,8 @@ export interface LandingProposal {
   brandSecondary: string
   brandLogoUrl: string | null
   message: string
+  dualPlanEnabled: boolean
+  dualPlanFeatures: string[]
   enterpriseEnabled: boolean
   enterpriseMonthlyFee: number | null
 }
@@ -186,6 +190,26 @@ function buildPricingSection(proposal: LandingProposal): string {
     lines.push(`Alternativa Enterprise: ${fee} EUR/mes (cuota fija, 12 meses)`)
   }
 
+  // Dual plan comparison
+  if (proposal.dualPlanEnabled && proposal.dualPlanFeatures.length > 0) {
+    const upgradeFeatures = [...proposal.features, ...proposal.dualPlanFeatures]
+    const { planId: upgradePlanId } = recommendPlan(upgradeFeatures)
+    const upgradePlan = PLANS[upgradePlanId as keyof typeof PLANS]
+    const activities = calcActivities(proposal)
+    const upgradeMonthlyCost = calcMonthlyCost(upgradePlanId, activities)
+
+    const additionalFeatureNames = proposal.dualPlanFeatures
+      .filter((f) => FEATURE_LABELS[f])
+      .map((f) => FEATURE_LABELS[f])
+
+    lines.push('')
+    lines.push('--- OPCIÓN B (plan superior) ---')
+    lines.push(`Plan: ${upgradePlan?.name ?? upgradePlanId}`)
+    lines.push(`Cuota base: ${upgradePlan?.base ?? 0} EUR/mes`)
+    lines.push(`Coste mensual total: ${upgradeMonthlyCost.toLocaleString('es-ES', { maximumFractionDigits: 0 })} EUR/mes`)
+    lines.push(`Funcionalidades adicionales incluidas: ${additionalFeatureNames.join(', ')}`)
+  }
+
   return lines.join('\n')
 }
 
@@ -259,7 +283,8 @@ ESTRUCTURA:
 - Hero Section (100vh, gradiente con los colores de marca, animación de fondo)
 - 2-3 secciones mostrando las funcionalidades contratadas y cómo aplican al negocio del cliente
 - Sección de integraciones con logos del stack tecnológico
-- **OBLIGATORIO: Sección final de PROPUESTA ECONÓMICA** (debe ser la última sección visible, con diseño de tabla/card profesional)
+- **OBLIGATORIO: Sección final de PROPUESTA ECONÓMICA** (debe ser la última sección visible, con diseño de tabla/card profesional)${proposal.dualPlanEnabled && proposal.dualPlanFeatures.length > 0 ? `
+- La propuesta económica DEBE mostrar DOS COLUMNAS lado a lado: "Opción A" (plan base) y "Opción B" (plan superior), cada una con su precio, funcionalidades incluidas y un botón CTA. Diseño tipo pricing cards comparativo.` : ''}
 - Botón CTA de contacto al final
 
 ANIMACIONES:

@@ -22,6 +22,8 @@ const updateSchema = z.object({
   techCrm: z.string().max(200),
   features: z.array(z.string().max(50)),
   implPace: z.enum(['rapida', 'estandar', 'holgada']),
+  dualPlanEnabled: z.boolean(),
+  dualPlanFeatures: z.array(z.string().max(50)),
   enterpriseEnabled: z.boolean(),
   enterpriseMonthlyFee: z.number().int().min(0).nullable(),
   enterpriseTerm: z.string().max(50),
