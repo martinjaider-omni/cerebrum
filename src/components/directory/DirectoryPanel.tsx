@@ -8,6 +8,7 @@ interface Person {
   title: string
   seniority: string
   linkedinUrl: string | null
+  apolloPersonId: string | null
   emails: string[]
   personalPhone: string | null
   companyPhone: string | null
@@ -144,6 +145,7 @@ export function DirectoryPanel() {
                           <th className="text-left px-5 py-2 font-medium">Email</th>
                           <th className="text-left px-5 py-2 font-medium">Teléfono</th>
                           <th className="text-left px-5 py-2 font-medium">LinkedIn</th>
+                          <th className="text-left px-5 py-2 font-medium">Apollo</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
@@ -183,6 +185,20 @@ export function DirectoryPanel() {
                                   className="text-blue-600 hover:underline"
                                 >
                                   Ver perfil
+                                </a>
+                              ) : (
+                                <span className="text-gray-300">—</span>
+                              )}
+                            </td>
+                            <td className="px-5 py-3">
+                              {p.apolloPersonId ? (
+                                <a
+                                  href={`https://app.apollo.io/#/people/${p.apolloPersonId}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-orange-600 hover:underline"
+                                >
+                                  Ver en Apollo
                                 </a>
                               ) : (
                                 <span className="text-gray-300">—</span>
