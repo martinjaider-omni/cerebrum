@@ -268,10 +268,10 @@ async function attioUpsertCompany(
     values.domains = [{ domain }]
   }
 
-  const body = { matching_attribute: matchingAttribute, data: { values } }
-  console.log(`[attio] PUT companies/records:`, JSON.stringify(body))
+  const body = { data: { values } }
+  console.log(`[attio] PUT companies/records?matching_attribute=${matchingAttribute}:`, JSON.stringify(body))
 
-  const res = await fetchWithRetry('https://api.attio.com/v2/objects/companies/records', {
+  const res = await fetchWithRetry(`https://api.attio.com/v2/objects/companies/records?matching_attribute=${matchingAttribute}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -336,16 +336,13 @@ async function attioUpsertPerson(
     values.company = [{ target: 'companies', id: { record_id: companyRecordId } }]
   }
 
-  const res = await fetchWithRetry('https://api.attio.com/v2/objects/people/records', {
+  const res = await fetchWithRetry('https://api.attio.com/v2/objects/people/records?matching_attribute=email_addresses', {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({
-      matching_attribute: 'email_addresses',
-      data: { values },
-    }),
+    body: JSON.stringify({ data: { values } }),
     signal: AbortSignal.timeout(15_000),
   })
   if (!res.ok) return null
