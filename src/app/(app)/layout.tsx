@@ -2,6 +2,14 @@ import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { MobileSidebarToggle } from '@/components/layout/MobileSidebarToggle'
 
+const navLinks = [
+  { href: '/', label: 'Dashboard', icon: '📋' },
+  { href: '/proposals/new', label: 'Nueva propuesta', icon: '✏️' },
+  { href: '/prospecting', label: 'Prospección', icon: '🔍' },
+  { href: '/directory', label: 'Directorio', icon: '👥' },
+  { href: '/gtm', label: 'GTM Engineer', icon: '🎯' },
+]
+
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
   if (!session) redirect('/login')
@@ -11,44 +19,51 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const userRole = (session.user as { role?: string }).role ?? ''
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-[#f8f9fa]">
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex w-64 bg-[#1e1e1e] text-white flex-col shrink-0">
-        <div className="p-6 border-b border-white/10">
-          <h1 className="font-bold text-lg tracking-tight">OmniWallet</h1>
-          <p className="text-xs text-gray-400 mt-0.5">Propuestas Comerciales</p>
+      <aside className="hidden md:flex w-60 bg-white border-r border-gray-200 flex-col shrink-0">
+        {/* Logo */}
+        <div className="px-5 py-5 border-b border-gray-100">
+          <img
+            src="https://omniwallet.net/assets/images/logo.svg"
+            alt="OmniWallet"
+            className="h-7"
+          />
         </div>
-        <nav className="flex-1 p-4 space-y-0.5" aria-label="Navegación principal">
-          <a href="/" className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-200 hover:bg-white/10 transition-colors">
-            <span aria-hidden="true">📋</span> Dashboard
-          </a>
-          <a href="/proposals/new" className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-200 hover:bg-white/10 transition-colors">
-            <span aria-hidden="true">✏️</span> Nueva propuesta
-          </a>
-          <a href="/prospecting" className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-200 hover:bg-white/10 transition-colors">
-            <span aria-hidden="true">🔍</span> Prospección
-          </a>
-          <a href="/directory" className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-200 hover:bg-white/10 transition-colors">
-            <span aria-hidden="true">👥</span> Directorio
-          </a>
-          <a href="/gtm" className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-200 hover:bg-white/10 transition-colors">
-            <span aria-hidden="true">🎯</span> GTM Engineer
-          </a>
+
+        {/* Navigation */}
+        <nav className="flex-1 px-3 py-4 space-y-0.5" aria-label="Navegación principal">
+          {navLinks.map(({ href, label, icon }) => (
+            <a
+              key={href}
+              href={href}
+              className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-[#232323] hover:bg-[#3E95B0]/10 hover:text-[#3E95B0] transition-colors"
+            >
+              <span aria-hidden="true" className="text-base">{icon}</span>
+              <span>{label}</span>
+            </a>
+          ))}
           {isAdmin && (
-            <a href="/admin" className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-200 hover:bg-white/10 transition-colors">
-              <span aria-hidden="true">⚙️</span> Admin
+            <a
+              href="/admin"
+              className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-[#232323] hover:bg-[#3E95B0]/10 hover:text-[#3E95B0] transition-colors"
+            >
+              <span aria-hidden="true" className="text-base">⚙️</span>
+              <span>Admin</span>
             </a>
           )}
         </nav>
-        <div className="p-4 border-t border-white/10">
-          <p className="text-xs text-gray-400 truncate">{userName}</p>
-          <span className={`mt-1 inline-block text-xs px-1.5 py-0.5 rounded ${isAdmin ? 'bg-purple-900 text-purple-200' : 'bg-gray-700 text-gray-300'}`}>
+
+        {/* User info */}
+        <div className="px-5 py-4 border-t border-gray-100">
+          <p className="text-sm font-medium text-[#232323] truncate">{userName}</p>
+          <span className={`mt-1 inline-block text-xs px-2 py-0.5 rounded-full font-medium ${isAdmin ? 'bg-[#3E95B0]/15 text-[#3E95B0]' : 'bg-gray-100 text-gray-500'}`}>
             {userRole}
           </span>
         </div>
       </aside>
 
-      {/* Mobile: header bar + drawer handled client-side */}
+      {/* Mobile */}
       <MobileSidebarToggle isAdmin={isAdmin} userName={userName} userRole={userRole} />
 
       <main className="flex-1 overflow-auto min-w-0" id="main-content">

@@ -14,8 +14,11 @@ const geistMono = localFont({
 })
 
 export const metadata: Metadata = {
-  title: 'OmniWallet · Propuestas Comerciales',
-  description: 'Generador de propuestas comerciales para el equipo OmniWallet',
+  title: 'OmniWallet · Plataforma Comercial',
+  description: 'Plataforma comercial del equipo OmniWallet: propuestas, prospección, CRM y GTM.',
+  icons: {
+    icon: 'https://omniwallet.net/assets/images/favicon.ico',
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

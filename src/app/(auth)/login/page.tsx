@@ -28,19 +28,20 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-md p-8">
+    <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] px-4">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
         <div className="mb-8 text-center">
-          <div className="w-12 h-12 bg-teal-600 rounded-xl flex items-center justify-center mx-auto mb-4" aria-hidden="true">
-            <span className="text-white text-xl font-black">O</span>
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900">OmniWallet</h1>
-          <p className="text-gray-500 mt-1 text-sm">Generador de Propuestas Comerciales</p>
+          <img
+            src="https://omniwallet.net/assets/images/logo.svg"
+            alt="OmniWallet"
+            className="h-8 mx-auto mb-4"
+          />
+          <p className="text-gray-500 mt-1 text-sm">Plataforma Comercial</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4" aria-label="Formulario de acceso" noValidate>
           <div>
-            <label htmlFor={emailId} className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor={emailId} className="block text-sm font-medium text-[#232323] mb-1">
               Email
             </label>
             <input
@@ -50,14 +51,14 @@ export default function LoginPage() {
               onChange={(e) => setEmail(e.target.value)}
               required
               autoComplete="email"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3E95B0] focus:border-[#3E95B0]"
               placeholder="tu@empresa.com"
               aria-describedby={error ? errorId : undefined}
             />
           </div>
 
           <div>
-            <label htmlFor={passwordId} className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor={passwordId} className="block text-sm font-medium text-[#232323] mb-1">
               Contraseña
             </label>
             <input
@@ -67,7 +68,7 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               autoComplete="current-password"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3E95B0] focus:border-[#3E95B0]"
               placeholder="••••••••"
             />
           </div>
@@ -81,7 +82,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-teal-600 text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-teal-700 disabled:opacity-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
+            className="w-full bg-[#3E95B0] text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-[#255664] disabled:opacity-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3E95B0] focus-visible:ring-offset-2"
             aria-busy={loading}
           >
             {loading ? 'Iniciando sesión…' : 'Iniciar sesión'}

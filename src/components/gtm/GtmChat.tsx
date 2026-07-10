@@ -69,7 +69,7 @@ export function GtmChat() {
       <div className="flex-1 overflow-auto p-4 md:p-6 space-y-4">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center">
-            <div className="w-16 h-16 bg-teal-100 rounded-2xl flex items-center justify-center mb-4">
+            <div className="w-16 h-16 bg-[#3E95B0]/15 rounded-2xl flex items-center justify-center mb-4">
               <span className="text-3xl">🎯</span>
             </div>
             <h2 className="text-xl font-bold text-gray-900 mb-2">GTM Engineer</h2>
@@ -81,7 +81,7 @@ export function GtmChat() {
                 <button
                   key={s}
                   onClick={() => { setInput(s); inputRef.current?.focus() }}
-                  className="text-left text-sm px-4 py-3 rounded-xl border border-gray-200 hover:border-teal-300 hover:bg-teal-50 text-gray-600 transition-colors"
+                  className="text-left text-sm px-4 py-3 rounded-xl border border-gray-200 hover:border-[#3E95B0] hover:bg-[#3E95B0]/5 text-gray-600 transition-colors"
                 >
                   {s}
                 </button>
@@ -95,7 +95,7 @@ export function GtmChat() {
             <div
               className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm ${
                 msg.role === 'user'
-                  ? 'bg-teal-600 text-white rounded-br-md'
+                  ? 'bg-[#3E95B0] text-white rounded-br-md'
                   : 'bg-white border border-gray-200 text-gray-800 rounded-bl-md'
               }`}
             >
@@ -142,7 +142,7 @@ export function GtmChat() {
             onKeyDown={handleKeyDown}
             placeholder="Pregunta sobre prospectos, CRM, o estrategia GTM..."
             rows={1}
-            className="flex-1 border border-gray-300 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 max-h-32"
+            className="flex-1 border border-gray-300 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#3E95B0] focus:border-[#3E95B0] max-h-32"
             style={{ minHeight: '44px' }}
             onInput={(e) => {
               const el = e.target as HTMLTextAreaElement
@@ -153,7 +153,7 @@ export function GtmChat() {
           <button
             type="submit"
             disabled={loading || !input.trim()}
-            className="shrink-0 bg-teal-600 hover:bg-teal-700 text-white px-5 py-3 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="shrink-0 bg-[#3E95B0] hover:bg-[#255664] text-white px-5 py-3 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? '...' : 'Enviar'}
           </button>
@@ -264,7 +264,7 @@ function InlineMarkdown({ text }: { text: string }) {
         }
         const linkMatch = part.match(/\[([^\]]+)\]\(([^)]+)\)/)
         if (linkMatch) {
-          return <a key={i} href={linkMatch[2]} target="_blank" rel="noopener noreferrer" className="text-teal-600 hover:underline">{linkMatch[1]}</a>
+          return <a key={i} href={linkMatch[2]} target="_blank" rel="noopener noreferrer" className="text-[#3E95B0] hover:underline">{linkMatch[1]}</a>
         }
         return <span key={i}>{part}</span>
       })}
