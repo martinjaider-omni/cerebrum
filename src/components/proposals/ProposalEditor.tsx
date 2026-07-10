@@ -99,7 +99,7 @@ const CRM_OPTIONS = [
 const SECTORS = [
   'Moda y textil', 'Cosmética y belleza', 'Deporte y outdoor', 'Alimentación y bebidas',
   'Electrónica', 'Hogar y decoración', 'Farmacia y salud', 'Joyería y accesorios',
-  'Librería y papelería', 'Mascotas', 'Óptica', 'Otro',
+  'Librería y papelería', 'Mascotas', 'Óptica', 'Restauración', 'Otro',
 ]
 
 // ── Types ──────────────────────────────────────────────────────────────────────
