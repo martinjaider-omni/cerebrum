@@ -2,9 +2,12 @@ import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { NextResponse } from 'next/server'
 
+interface ServiceResult { ok: boolean; error?: string; detail?: string }
+
 interface TestResult {
-  apollo: { ok: boolean; error?: string; detail?: string }
-  attio: { ok: boolean; error?: string; detail?: string } | null
+  apollo: ServiceResult
+  attio: ServiceResult | null
+  anthropic: ServiceResult | null
 }
 
 export async function POST() {
@@ -18,6 +21,7 @@ export async function POST() {
   const result: TestResult = {
     apollo: { ok: false },
     attio: null,
+    anthropic: null,
   }
 
   // Test Apollo API key
@@ -80,6 +84,62 @@ export async function POST() {
       }
     } catch (err) {
       result.attio = { ok: false, error: `No se pudo conectar: ${err instanceof Error ? err.message : String(err)}` }
+    }
+  }
+
+  // Test Anthropic API key (optional)
+  const anthropicKey = (settings as Record<string, unknown>).anthropicApiKey as string
+  if (anthropicKey) {
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': anthropicKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 10,
+          messages: [{ role: 'user', content: 'ping' }],
+        }),
+        signal: AbortSignal.timeout(15_000),
+      })
+
+      if (res.ok) {
+        result.anthropic = { ok: true, detail: 'API key válida — modelo claude-sonnet-4-6' }
+      } else if (res.status === 401) {
+        result.anthropic = { ok: false, error: 'API key inválida o expirada' }
+      } else if (res.status === 404) {
+        // Model not found — try fallback to check if key works
+        const fallbackRes = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': anthropicKey,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
+            model: 'claude-3-5-haiku-20241022',
+            max_tokens: 10,
+            messages: [{ role: 'user', content: 'ping' }],
+          }),
+          signal: AbortSignal.timeout(15_000),
+        })
+        if (fallbackRes.ok) {
+          result.anthropic = { ok: true, detail: 'API key válida — claude-sonnet-4-6 no disponible, verificar modelo' }
+        } else if (fallbackRes.status === 401) {
+          result.anthropic = { ok: false, error: 'API key inválida' }
+        } else {
+          const errBody = await fallbackRes.text().catch(() => '')
+          result.anthropic = { ok: false, error: `HTTP ${fallbackRes.status}: ${errBody.slice(0, 200)}` }
+        }
+      } else {
+        const errBody = await res.text().catch(() => '')
+        result.anthropic = { ok: false, error: `HTTP ${res.status}: ${errBody.slice(0, 200)}` }
+      }
+    } catch (err) {
+      result.anthropic = { ok: false, error: `No se pudo conectar: ${err instanceof Error ? err.message : String(err)}` }
     }
   }
 

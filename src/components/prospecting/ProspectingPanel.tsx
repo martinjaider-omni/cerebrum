@@ -48,9 +48,12 @@ interface Props {
 
 // ── Settings sub-panel (admin only) ───────────────────────────────────────────
 
+interface ServiceResult { ok: boolean; error?: string; detail?: string }
+
 interface TestStatus {
-  apollo: { ok: boolean; error?: string; detail?: string }
-  attio: { ok: boolean; error?: string; detail?: string } | null
+  apollo: ServiceResult
+  attio: ServiceResult | null
+  anthropic: ServiceResult | null
 }
 
 function SettingsPanel({ onClose }: { onClose: () => void }) {
@@ -230,6 +233,30 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
               <div>
                 <p className="font-semibold text-gray-600">Attio no configurado</p>
                 <p className="text-xs text-gray-500">Opcional — agrega un token para sincronizar contactos</p>
+              </div>
+            </div>
+          )}
+
+          {testResult.anthropic && (
+            <div className={`flex items-center gap-3 rounded-lg px-4 py-3 text-sm ${testResult.anthropic.ok ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+              <span className="text-lg">{testResult.anthropic.ok ? '✅' : '❌'}</span>
+              <div>
+                <p className={`font-semibold ${testResult.anthropic.ok ? 'text-green-800' : 'text-red-800'}`}>
+                  Anthropic (Claude) {testResult.anthropic.ok ? 'conectado' : 'error'}
+                </p>
+                <p className={`text-xs ${testResult.anthropic.ok ? 'text-green-600' : 'text-red-600'}`}>
+                  {testResult.anthropic.ok ? testResult.anthropic.detail : testResult.anthropic.error}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {!form.anthropicApiKey && !testResult.anthropic && (
+            <div className="flex items-center gap-3 rounded-lg px-4 py-3 text-sm bg-gray-50 border border-gray-200">
+              <span className="text-lg">⏭</span>
+              <div>
+                <p className="font-semibold text-gray-600">Anthropic no configurado</p>
+                <p className="text-xs text-gray-500">Necesario para el GTM Engineer</p>
               </div>
             </div>
           )}
