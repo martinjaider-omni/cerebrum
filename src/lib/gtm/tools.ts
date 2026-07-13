@@ -161,13 +161,14 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: 'attio_add_to_list',
-    description: 'Add a record (company or person) to an Attio list.',
+    description: 'Add a record (company or person) to an Attio list. Optionally set entry_values for list-specific attributes.',
     input_schema: {
       type: 'object' as const,
       properties: {
         list_id: { type: 'string', description: 'List ID' },
         record_id: { type: 'string', description: 'Record ID to add' },
         record_type: { type: 'string', enum: ['companies', 'people'], description: 'Record type (default: companies)' },
+        entry_values: { type: 'object', description: 'Optional list-specific attribute values for the entry' },
       },
       required: ['list_id', 'record_id'],
     },
@@ -463,16 +464,23 @@ export async function executeTool(name: string, input: Record<string, unknown>):
       const token = requireAttio(settings)
       if (!token) return JSON.stringify({ error: 'Attio not configured' })
       const recordType = (input.record_type as string) || 'companies'
-      return JSON.stringify(await attioFetch(token, 'POST', `/lists/${input.list_id}/entries`, {
-        data: { record: { target: recordType, id: { record_id: input.record_id } } },
-      }), null, 2)
+      const body: Record<string, unknown> = {
+        data: {
+          parent_record: { target: recordType, id: { record_id: input.record_id } },
+        },
+      }
+      // Include entry_values if provided
+      if (input.entry_values) {
+        (body.data as Record<string, unknown>).entry_values = input.entry_values
+      }
+      return JSON.stringify(await attioFetch(token, 'POST', `/lists/${input.list_id}/entries`, body), null, 2)
     }
 
     if (name === 'attio_update_list_entry') {
       const token = requireAttio(settings)
       if (!token) return JSON.stringify({ error: 'Attio not configured' })
       return JSON.stringify(await attioFetch(token, 'PATCH', `/lists/${input.list_id}/entries/${input.entry_id}`, {
-        data: { values: input.values },
+        data: { entry_values: input.values },
       }), null, 2)
     }
 
