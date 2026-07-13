@@ -58,6 +58,7 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
     apolloApiKey: '',
     attioAccessToken: '',
     attioListId: '',
+    anthropicApiKey: '',
     icpTitles: '',
     maxPeoplePerCompany: 3,
     revealPhones: false,
@@ -77,6 +78,7 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
           apolloApiKey: d.apolloApiKey ?? '',
           attioAccessToken: d.attioAccessToken ?? '',
           attioListId: d.attioListId ?? '',
+          anthropicApiKey: d.anthropicApiKey ?? '',
           icpTitles: (d.icpTitles ?? []).join('\n'),
           maxPeoplePerCompany: d.maxPeoplePerCompany ?? 3,
           revealPhones: d.revealPhones ?? false,
@@ -150,6 +152,11 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
             <label className="block text-xs font-semibold text-gray-600 mb-1">Max personas por empresa</label>
             <input className={inputCls} type="number" min={1} max={10} value={form.maxPeoplePerCompany} onChange={(e) => setForm({ ...form, maxPeoplePerCompany: parseInt(e.target.value) || 3 })} />
           </div>
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 mb-1">Anthropic API Key <span className="text-gray-400 font-normal">(para GTM Engineer)</span></label>
+          <input className={inputCls} type="password" value={form.anthropicApiKey} onChange={(e) => setForm({ ...form, anthropicApiKey: e.target.value })} placeholder="sk-ant-…" autoComplete="off" />
         </div>
 
         <div>

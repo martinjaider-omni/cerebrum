@@ -1,9 +1,8 @@
 import { auth } from '@/lib/auth'
+import { db } from '@/lib/db'
 import { NextRequest } from 'next/server'
 import { TOOL_DEFINITIONS, executeTool } from '@/lib/gtm/tools'
 import { GTM_SYSTEM_PROMPT } from '@/lib/gtm/system-prompt'
-
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
 
 interface Message {
   role: 'user' | 'assistant'
@@ -14,8 +13,12 @@ export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session?.user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
+  // Read API key from DB settings (or fallback to env var)
+  const settings = await db.integrationSettings.findFirst()
+  const ANTHROPIC_API_KEY = (settings as Record<string, unknown>)?.anthropicApiKey as string || process.env.ANTHROPIC_API_KEY
+
   if (!ANTHROPIC_API_KEY) {
-    return Response.json({ error: 'ANTHROPIC_API_KEY not configured. Add it to your environment variables.' }, { status: 500 })
+    return Response.json({ error: 'Anthropic API Key no configurada. Ve a Prospección → Configuración para añadirla.' }, { status: 500 })
   }
 
   const { messages } = (await req.json()) as { messages: Message[] }

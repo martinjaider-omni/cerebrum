@@ -114,6 +114,7 @@ model IntegrationSettings {
   apolloApiKey        String   @default("")
   attioAccessToken    String   @default("")
   attioListId         String   @default("")
+  anthropicApiKey     String   @default("")
   icpTitles           String[]
   maxPeoplePerCompany Int      @default(3)
   revealPhones        Boolean  @default(false)
