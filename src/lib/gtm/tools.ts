@@ -506,14 +506,14 @@ export async function executeTool(name: string, input: Record<string, unknown>):
       const recordType = (input.record_type as string) || 'companies'
       const body: Record<string, unknown> = {
         data: {
-          parent_record: { target: recordType, id: { record_id: input.record_id } },
+          parent_object: recordType,
+          parent_record_id: input.record_id,
         },
       }
-      // Include entry_values if provided
       if (input.entry_values) {
         (body.data as Record<string, unknown>).entry_values = input.entry_values
       }
-      return JSON.stringify(await attioFetch(token, 'POST', `/lists/${input.list_id}/entries`, body), null, 2)
+      return slimResult(await attioFetch(token, 'POST', `/lists/${input.list_id}/entries`, body))
     }
 
     if (name === 'attio_update_list_entry') {
