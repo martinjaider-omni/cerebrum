@@ -16,6 +16,7 @@ model User {
   createdAt    DateTime   @default(now())
   proposals    Proposal[]
   batches      ProspectingBatch[]
+  gtmThreads   GtmThread[]
 }
 
 enum Role {
@@ -121,6 +122,25 @@ model IntegrationSettings {
   revealEmails        Boolean  @default(true)
   updatedById         String?
   updatedAt           DateTime @updatedAt
+}
+
+model GtmThread {
+  id        String       @id @default(cuid())
+  ownerId   String
+  owner     User         @relation(fields: [ownerId], references: [id])
+  title     String       @default("Nueva conversación")
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  messages  GtmMessage[]
+}
+
+model GtmMessage {
+  id        String   @id @default(cuid())
+  threadId  String
+  thread    GtmThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  role      String   // 'user' | 'assistant'
+  content   String
+  createdAt DateTime @default(now())
 }
 
 model ProspectingBatch {

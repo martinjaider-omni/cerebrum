@@ -4,16 +4,10 @@ import { NextRequest } from 'next/server'
 import { TOOL_DEFINITIONS, executeTool } from '@/lib/gtm/tools'
 import { GTM_SYSTEM_PROMPT } from '@/lib/gtm/system-prompt'
 
-interface Message {
-  role: 'user' | 'assistant'
-  content: string
-}
-
 export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session?.user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // Read API key from DB settings (or fallback to env var)
   const settings = await db.integrationSettings.findFirst()
   const ANTHROPIC_API_KEY = (settings as Record<string, unknown>)?.anthropicApiKey as string || process.env.ANTHROPIC_API_KEY
 
@@ -21,19 +15,44 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: 'Anthropic API Key no configurada. Ve a Prospección → Configuración para añadirla.' }, { status: 500 })
   }
 
-  const { messages } = (await req.json()) as { messages: Message[] }
-  if (!messages || !Array.isArray(messages)) {
-    return Response.json({ error: 'messages array required' }, { status: 400 })
+  const { threadId, message } = (await req.json()) as { threadId: string; message: string }
+  if (!threadId || !message) {
+    return Response.json({ error: 'threadId and message required' }, { status: 400 })
   }
 
+  // Verify thread ownership
+  const thread = await db.gtmThread.findUnique({ where: { id: threadId } })
+  if (!thread || thread.ownerId !== session.user.id) {
+    return Response.json({ error: 'Thread not found' }, { status: 404 })
+  }
+
+  // Save user message
+  await db.gtmMessage.create({
+    data: { threadId, role: 'user', content: message },
+  })
+
+  // Update thread title from first message
+  if (thread.title === 'Nueva conversación') {
+    await db.gtmThread.update({
+      where: { id: threadId },
+      data: { title: message.slice(0, 80) },
+    })
+  }
+
+  // Load full conversation history
+  const dbMessages = await db.gtmMessage.findMany({
+    where: { threadId },
+    orderBy: { createdAt: 'asc' },
+  })
+
   // Build Claude API messages
-  const apiMessages = messages.map((m) => ({
-    role: m.role,
+  const apiMessages = dbMessages.map((m) => ({
+    role: m.role as 'user' | 'assistant',
     content: m.content,
   }))
 
-  // Agentic loop: call Claude, execute tools, repeat until final text response
-  let currentMessages = [...apiMessages]
+  // Agentic loop
+  let currentMessages: unknown[] = [...apiMessages]
   const maxIterations = 10
 
   for (let i = 0; i < maxIterations; i++) {
@@ -60,16 +79,10 @@ export async function POST(req: NextRequest) {
 
     const result = await response.json()
 
-    // Check if Claude wants to use tools
     if (result.stop_reason === 'tool_use') {
-      // Extract tool use blocks
       const toolUseBlocks = result.content.filter((b: { type: string }) => b.type === 'tool_use')
-      const textBlocks = result.content.filter((b: { type: string }) => b.type === 'text')
-
-      // Add assistant message with all content blocks
       currentMessages.push({ role: 'assistant', content: result.content })
 
-      // Execute tools and build tool results
       const toolResults = []
       for (const toolUse of toolUseBlocks) {
         const toolResult = await executeTool(toolUse.name, toolUse.input as Record<string, unknown>)
@@ -79,19 +92,26 @@ export async function POST(req: NextRequest) {
           content: toolResult,
         })
       }
-
-      // Add tool results as user message
       currentMessages.push({ role: 'user', content: toolResults })
-
-      // Continue loop to get Claude's response after tool use
       continue
     }
 
-    // Final response — extract text
+    // Final response
     const textContent = result.content
       .filter((b: { type: string }) => b.type === 'text')
       .map((b: { text: string }) => b.text)
       .join('\n')
+
+    // Save assistant message to DB
+    await db.gtmMessage.create({
+      data: { threadId, role: 'assistant', content: textContent },
+    })
+
+    // Touch thread updatedAt
+    await db.gtmThread.update({
+      where: { id: threadId },
+      data: { updatedAt: new Date() },
+    })
 
     return Response.json({ response: textContent })
   }
