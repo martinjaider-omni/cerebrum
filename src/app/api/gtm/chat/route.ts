@@ -53,9 +53,12 @@ export async function POST(req: NextRequest) {
 
   // Agentic loop
   let currentMessages: unknown[] = [...apiMessages]
-  const maxIterations = 10
+  const maxIterations = 20
 
   for (let i = 0; i < maxIterations; i++) {
+    // On last 2 iterations, remove tools to force a text response
+    const isLastChance = i >= maxIterations - 2
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -66,8 +69,10 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
         max_tokens: 4096,
-        system: GTM_SYSTEM_PROMPT,
-        tools: TOOL_DEFINITIONS,
+        system: isLastChance
+          ? GTM_SYSTEM_PROMPT + '\n\nIMPORTANTE: Responde ahora con lo que tengas. No uses más tools.'
+          : GTM_SYSTEM_PROMPT,
+        ...(!isLastChance ? { tools: TOOL_DEFINITIONS } : {}),
         messages: currentMessages,
       }),
     })
