@@ -335,6 +335,40 @@ function requireAttio(settings: Awaited<ReturnType<typeof getSettings>>): string
   return settings.attioAccessToken
 }
 
+// ── Response slimming (reduce token usage) ───────────────────────────────────
+
+function slimApolloOrg(org: Record<string, unknown>) {
+  return {
+    id: org.id,
+    name: org.name,
+    website_url: org.website_url,
+    primary_domain: org.primary_domain,
+    phone: org.phone,
+    industry: org.industry,
+    estimated_num_employees: org.estimated_num_employees,
+    city: org.city,
+    country: org.country,
+    linkedin_url: org.linkedin_url,
+  }
+}
+
+function slimApolloPerson(p: Record<string, unknown>) {
+  return {
+    id: p.id,
+    name: p.name ?? (p.first_name ? `${p.first_name} ${p.last_name ?? ''}`.trim() : ''),
+    title: p.title,
+    seniority: p.seniority,
+    email: p.email,
+    linkedin_url: p.linkedin_url,
+    organization_id: p.organization_id,
+    phone_numbers: p.phone_numbers,
+  }
+}
+
+function slimResult(data: unknown): string {
+  return JSON.stringify(data)
+}
+
 // ── Tool execution ───────────────────────────────────────────────────────────
 
 export async function executeTool(name: string, input: Record<string, unknown>): Promise<string> {
@@ -351,7 +385,10 @@ export async function executeTool(name: string, input: Record<string, unknown>):
       if (input.min_employees || input.max_employees) {
         body.organization_num_employees_ranges = [`${input.min_employees ?? 1},${input.max_employees ?? 1000000}`]
       }
-      return JSON.stringify(await apolloFetch(settings.apolloApiKey, '/organizations/search', body), null, 2)
+      const raw = await apolloFetch(settings.apolloApiKey, '/organizations/search', body)
+      if (raw.error) return JSON.stringify(raw)
+      const orgs = (raw.organizations ?? []).map(slimApolloOrg)
+      return slimResult({ organizations: orgs, total: raw.pagination?.total_entries })
     }
 
     if (name === 'apollo_search_people') {
@@ -362,7 +399,10 @@ export async function executeTool(name: string, input: Record<string, unknown>):
       if (input.person_titles) body.person_titles = input.person_titles
       if (input.person_seniorities) body.person_seniorities = input.person_seniorities
       if (input.person_locations) body.person_locations = input.person_locations
-      return JSON.stringify(await apolloFetch(settings.apolloApiKey, '/mixed_people/api_search', body), null, 2)
+      const raw = await apolloFetch(settings.apolloApiKey, '/mixed_people/api_search', body)
+      if (raw.error) return JSON.stringify(raw)
+      const people = (raw.contacts ?? raw.people ?? []).map(slimApolloPerson)
+      return slimResult({ people, total: raw.pagination?.total_entries })
     }
 
     // ── Attio: Workspace ───────────────────────────────────────────────────

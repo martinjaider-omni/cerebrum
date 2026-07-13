@@ -4,6 +4,15 @@ import { NextRequest } from 'next/server'
 import { TOOL_DEFINITIONS, executeTool } from '@/lib/gtm/tools'
 import { GTM_SYSTEM_PROMPT } from '@/lib/gtm/system-prompt'
 
+const MAX_HISTORY = 20 // Max messages from history to send
+const MAX_TOOL_RESULT_CHARS = 8000 // Truncate large API responses
+const MAX_ITERATIONS = 15
+
+function truncateToolResult(result: string): string {
+  if (result.length <= MAX_TOOL_RESULT_CHARS) return result
+  return result.slice(0, MAX_TOOL_RESULT_CHARS) + '\n\n[... truncado, resultado demasiado largo]'
+}
+
 export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session?.user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
@@ -20,44 +29,38 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: 'threadId and message required' }, { status: 400 })
   }
 
-  // Verify thread ownership
   const thread = await db.gtmThread.findUnique({ where: { id: threadId } })
   if (!thread || thread.ownerId !== session.user.id) {
     return Response.json({ error: 'Thread not found' }, { status: 404 })
   }
 
-  // Save user message
-  await db.gtmMessage.create({
-    data: { threadId, role: 'user', content: message },
-  })
+  await db.gtmMessage.create({ data: { threadId, role: 'user', content: message } })
 
-  // Update thread title from first message
   if (thread.title === 'Nueva conversación') {
-    await db.gtmThread.update({
-      where: { id: threadId },
-      data: { title: message.slice(0, 80) },
-    })
+    await db.gtmThread.update({ where: { id: threadId }, data: { title: message.slice(0, 80) } })
   }
 
-  // Load full conversation history
+  // Load only recent messages to limit context size
   const dbMessages = await db.gtmMessage.findMany({
     where: { threadId },
     orderBy: { createdAt: 'asc' },
   })
 
-  // Build Claude API messages
-  const apiMessages = dbMessages.map((m) => ({
+  // Keep only last N messages, always keeping the first user message for context
+  const trimmed = dbMessages.length > MAX_HISTORY
+    ? [dbMessages[0], ...dbMessages.slice(-MAX_HISTORY + 1)]
+    : dbMessages
+
+  const apiMessages = trimmed.map((m) => ({
     role: m.role as 'user' | 'assistant',
     content: m.content,
   }))
 
   // Agentic loop
   let currentMessages: unknown[] = [...apiMessages]
-  const maxIterations = 20
 
-  for (let i = 0; i < maxIterations; i++) {
-    // On last 2 iterations, remove tools to force a text response
-    const isLastChance = i >= maxIterations - 2
+  for (let i = 0; i < MAX_ITERATIONS; i++) {
+    const isLastChance = i >= MAX_ITERATIONS - 2
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -68,9 +71,9 @@ export async function POST(req: NextRequest) {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 4096,
+        max_tokens: isLastChance ? 1024 : 2048,
         system: isLastChance
-          ? GTM_SYSTEM_PROMPT + '\n\nIMPORTANTE: Responde ahora con lo que tengas. No uses más tools.'
+          ? GTM_SYSTEM_PROMPT + '\nResponde ahora con lo que tengas. No uses más tools.'
           : GTM_SYSTEM_PROMPT,
         ...(!isLastChance ? { tools: TOOL_DEFINITIONS } : {}),
         messages: currentMessages,
@@ -90,33 +93,24 @@ export async function POST(req: NextRequest) {
 
       const toolResults = []
       for (const toolUse of toolUseBlocks) {
-        const toolResult = await executeTool(toolUse.name, toolUse.input as Record<string, unknown>)
+        const raw = await executeTool(toolUse.name, toolUse.input as Record<string, unknown>)
         toolResults.push({
           type: 'tool_result',
           tool_use_id: toolUse.id,
-          content: toolResult,
+          content: truncateToolResult(raw),
         })
       }
       currentMessages.push({ role: 'user', content: toolResults })
       continue
     }
 
-    // Final response
     const textContent = result.content
       .filter((b: { type: string }) => b.type === 'text')
       .map((b: { text: string }) => b.text)
       .join('\n')
 
-    // Save assistant message to DB
-    await db.gtmMessage.create({
-      data: { threadId, role: 'assistant', content: textContent },
-    })
-
-    // Touch thread updatedAt
-    await db.gtmThread.update({
-      where: { id: threadId },
-      data: { updatedAt: new Date() },
-    })
+    await db.gtmMessage.create({ data: { threadId, role: 'assistant', content: textContent } })
+    await db.gtmThread.update({ where: { id: threadId }, data: { updatedAt: new Date() } })
 
     return Response.json({ response: textContent })
   }
