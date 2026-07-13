@@ -145,7 +145,7 @@ function planBadge(featureId: string) {
   const colors: Record<string, string> = {
     starter: 'bg-blue-50 text-blue-700',
     plus: 'bg-purple-50 text-purple-700',
-    advanced: 'bg-teal-50 text-teal-700',
+    advanced: 'bg-[#3E95B0]/10 text-[#255664]',
     enterprise: 'bg-orange-50 text-orange-700',
   }
   return (
@@ -178,8 +178,8 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   )
 }
 
-const inputCls = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500'
-const selectCls = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white'
+const inputCls = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3E95B0]'
+const selectCls = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3E95B0] bg-white'
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
@@ -415,7 +415,7 @@ export function ProposalEditor({ initial }: { initial: ProposalData }) {
           <a href="/" className="text-gray-400 hover:text-gray-600 text-sm">← Dashboard</a>
           <div className="flex-1 flex items-center gap-2">
             <input
-              className="text-xl font-bold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-teal-400 focus:outline-none px-1 py-0.5"
+              className="text-xl font-bold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-[#3E95B0] focus:outline-none px-1 py-0.5"
               value={data.name}
               onChange={(e) => update({ name: e.target.value })}
             />
@@ -437,7 +437,7 @@ export function ProposalEditor({ initial }: { initial: ProposalData }) {
             )}
             <button
               onClick={() => router.push(`/proposals/${data.id}/preview`)}
-              className="px-3 py-1.5 text-sm bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition"
+              className="px-3 py-1.5 text-sm bg-[#3E95B0] text-white rounded-lg hover:bg-[#255664] transition"
             >
               Ver propuesta →
             </button>
@@ -480,11 +480,11 @@ export function ProposalEditor({ initial }: { initial: ProposalData }) {
           <Field label="Canales activos">
             <div className="flex gap-6 mt-1">
               <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" className="w-4 h-4 accent-teal-600" checked={data.channelOnline} onChange={(e) => update({ channelOnline: e.target.checked })} />
+                <input type="checkbox" className="w-4 h-4 accent-[#3E95B0]" checked={data.channelOnline} onChange={(e) => update({ channelOnline: e.target.checked })} />
                 <span className="text-sm">Tienda online (eCommerce)</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" className="w-4 h-4 accent-teal-600" checked={data.channelStore} onChange={(e) => update({ channelStore: e.target.checked })} />
+                <input type="checkbox" className="w-4 h-4 accent-[#3E95B0]" checked={data.channelStore} onChange={(e) => update({ channelStore: e.target.checked })} />
                 <span className="text-sm">Tiendas físicas (TPV)</span>
               </label>
             </div>
@@ -504,7 +504,7 @@ export function ProposalEditor({ initial }: { initial: ProposalData }) {
               <button
                 onClick={handleBrandImport}
                 disabled={brandImporting || !data.clientUrl}
-                className="block w-full text-sm px-4 py-2 rounded-lg bg-teal-600 text-white font-medium hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="block w-full text-sm px-4 py-2 rounded-lg bg-[#3E95B0] text-white font-medium hover:bg-[#255664] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {brandImporting ? 'Importando…' : '⬇ Importar marca desde web'}
               </button>
@@ -614,7 +614,7 @@ export function ProposalEditor({ initial }: { initial: ProposalData }) {
                 type="range" min={0} max={100} step={5}
                 value={data.offlineRegPct}
                 onChange={(e) => update({ offlineRegPct: parseInt(e.target.value) })}
-                className="w-full accent-teal-600"
+                className="w-full accent-[#3E95B0]"
               />
               <div className="flex justify-between text-xs text-gray-400 mt-1">
                 <span>0%</span><span>50%</span><span>100%</span>
@@ -627,7 +627,7 @@ export function ProposalEditor({ initial }: { initial: ProposalData }) {
               type="range" min={1} max={3} step={0.1}
               value={data.activityFactor}
               onChange={(e) => update({ activityFactor: parseFloat(e.target.value) })}
-              className="w-full accent-teal-600"
+              className="w-full accent-[#3E95B0]"
             />
             <div className="flex justify-between text-xs text-gray-400 mt-1">
               <span>1,0</span><span>2,0</span><span>3,0</span>
@@ -677,7 +677,7 @@ export function ProposalEditor({ initial }: { initial: ProposalData }) {
                     <label key={feat.id} className="flex items-center gap-2 cursor-pointer group py-1 px-2 rounded hover:bg-gray-50">
                       <input
                         type="checkbox"
-                        className="w-4 h-4 accent-teal-600 shrink-0"
+                        className="w-4 h-4 accent-[#3E95B0] shrink-0"
                         checked={data.features.includes(feat.id)}
                         onChange={() => toggleFeature(feat.id)}
                       />
@@ -696,7 +696,7 @@ export function ProposalEditor({ initial }: { initial: ProposalData }) {
           <label className="flex items-center gap-3 cursor-pointer">
             <div
               onClick={() => update({ dualPlanEnabled: !data.dualPlanEnabled, dualPlanFeatures: data.dualPlanFeatures ?? [] })}
-              className={`w-10 h-6 rounded-full transition-colors relative cursor-pointer ${data.dualPlanEnabled ? 'bg-teal-500' : 'bg-gray-300'}`}
+              className={`w-10 h-6 rounded-full transition-colors relative cursor-pointer ${data.dualPlanEnabled ? 'bg-[#3E95B0]/100' : 'bg-gray-300'}`}
             >
               <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${data.dualPlanEnabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
             </div>
@@ -736,8 +736,8 @@ export function ProposalEditor({ initial }: { initial: ProposalData }) {
                     <p className="text-lg font-bold text-gray-900 mt-1">{PLANS[basePlan as keyof typeof PLANS]?.name}</p>
                     <p className="text-xs text-gray-400 mt-0.5">{data.features.length} funcionalidades seleccionadas</p>
                   </div>
-                  <div className="bg-teal-50 rounded-lg p-4 border border-teal-200">
-                    <p className="text-xs font-semibold text-teal-600 uppercase">Opción B — Superior</p>
+                  <div className="bg-[#3E95B0]/10 rounded-lg p-4 border border-[#3E95B0]/30">
+                    <p className="text-xs font-semibold text-[#3E95B0] uppercase">Opción B — Superior</p>
                     <p className="text-lg font-bold text-gray-900 mt-1">{upgradePlan.name}</p>
                     <p className="text-xs text-gray-400 mt-0.5">{data.features.length + (data.dualPlanFeatures?.length ?? 0)} funcionalidades</p>
                   </div>
@@ -757,7 +757,7 @@ export function ProposalEditor({ initial }: { initial: ProposalData }) {
                         <label key={featId} className={`flex items-center gap-2 py-1 px-2 rounded ${alreadyInBase ? 'opacity-50' : 'cursor-pointer hover:bg-gray-50'}`}>
                           <input
                             type="checkbox"
-                            className="w-4 h-4 accent-teal-600 shrink-0"
+                            className="w-4 h-4 accent-[#3E95B0] shrink-0"
                             checked={checked}
                             disabled={alreadyInBase}
                             onChange={() => {
@@ -796,7 +796,7 @@ export function ProposalEditor({ initial }: { initial: ProposalData }) {
                 <button
                   key={pace}
                   onClick={() => update({ implPace: pace })}
-                  className={`text-left p-3 rounded-lg border-2 transition ${data.implPace === pace ? 'border-teal-500 bg-teal-50' : 'border-gray-200 hover:border-gray-300'}`}
+                  className={`text-left p-3 rounded-lg border-2 transition ${data.implPace === pace ? 'border-[#3E95B0] bg-[#3E95B0]/10' : 'border-gray-200 hover:border-gray-300'}`}
                 >
                   <p className="font-semibold text-sm">{labels[pace]}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{descs[pace]}</p>
@@ -811,7 +811,7 @@ export function ProposalEditor({ initial }: { initial: ProposalData }) {
           <label className="flex items-center gap-3 cursor-pointer">
             <div
               onClick={() => update({ enterpriseEnabled: !data.enterpriseEnabled })}
-              className={`w-10 h-6 rounded-full transition-colors relative cursor-pointer ${data.enterpriseEnabled ? 'bg-teal-500' : 'bg-gray-300'}`}
+              className={`w-10 h-6 rounded-full transition-colors relative cursor-pointer ${data.enterpriseEnabled ? 'bg-[#3E95B0]/100' : 'bg-gray-300'}`}
             >
               <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${data.enterpriseEnabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
             </div>
@@ -946,7 +946,7 @@ export function ProposalEditor({ initial }: { initial: ProposalData }) {
                     href={shareUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-sm text-teal-600 hover:text-teal-700 font-medium"
+                    className="text-sm text-[#3E95B0] hover:text-[#255664] font-medium"
                   >
                     Abrir link →
                   </a>
@@ -963,7 +963,7 @@ export function ProposalEditor({ initial }: { initial: ProposalData }) {
               <button
                 onClick={handleShareCreate}
                 disabled={shareLoading}
-                className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50"
+                className="px-4 py-2 bg-[#3E95B0] hover:bg-[#255664] text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50"
               >
                 {shareLoading ? 'Generando…' : '🔗 Generar link de compartir'}
               </button>

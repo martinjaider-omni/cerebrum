@@ -13,7 +13,7 @@ export default function GlobalError({ error, reset }: { error: Error; reset: () 
         <div className="flex gap-3 justify-center">
           <button
             onClick={reset}
-            className="bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors"
+            className="bg-[#3E95B0] hover:bg-[#255664] text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors"
           >
             Reintentar
           </button>

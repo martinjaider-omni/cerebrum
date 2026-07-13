@@ -76,7 +76,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
         </div>
         <Link
           href="/proposals/new"
-          className="bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-teal-700 transition"
+          className="bg-[#3E95B0] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#255664] transition"
         >
           + Nueva propuesta
         </Link>
@@ -93,7 +93,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
             type="text"
             defaultValue={q}
             placeholder="Nombre o cliente..."
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3E95B0] focus:border-[#3E95B0]"
           />
         </div>
 
@@ -104,7 +104,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
             id="status"
             name="status"
             defaultValue={status || 'all'}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#3E95B0] focus:border-[#3E95B0]"
           >
             <option value="all">Todos</option>
             <option value="draft">Borrador</option>
@@ -119,7 +119,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
             id="sort"
             name="sort"
             defaultValue={sort}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#3E95B0] focus:border-[#3E95B0]"
           >
             <option value="updatedAt">Actualizado</option>
             <option value="createdAt">Creado</option>
@@ -131,7 +131,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
         {/* Submit */}
         <button
           type="submit"
-          className="bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-teal-700 transition"
+          className="bg-[#3E95B0] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#255664] transition"
         >
           Filtrar
         </button>
@@ -158,7 +158,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
                 </div>
                 <div className="flex gap-2">
                   <Link href={`/proposals/${p.id}/edit`} className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition">Editar</Link>
-                  <Link href={`/proposals/${p.id}/preview`} className="px-3 py-1.5 text-sm bg-teal-50 text-teal-700 border border-teal-200 rounded-lg hover:bg-teal-100 transition">Ver</Link>
+                  <Link href={`/proposals/${p.id}/preview`} className="px-3 py-1.5 text-sm bg-[#3E95B0]/10 text-[#255664] border border-[#3E95B0]/30 rounded-lg hover:bg-[#3E95B0]/15 transition">Ver</Link>
                 </div>
               </div>
             ))}

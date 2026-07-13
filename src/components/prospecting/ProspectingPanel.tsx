@@ -123,7 +123,7 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
     }
   }
 
-  const inputCls = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500'
+  const inputCls = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3E95B0]'
 
   if (loading) return <div className="p-6 text-sm text-gray-400">Cargando configuración…</div>
 
@@ -171,17 +171,17 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
 
         <div className="flex gap-6">
           <label className="flex items-center gap-2 cursor-pointer text-sm">
-            <input type="checkbox" className="w-4 h-4 accent-teal-600" checked={form.revealEmails} onChange={(e) => setForm({ ...form, revealEmails: e.target.checked })} />
+            <input type="checkbox" className="w-4 h-4 accent-[#3E95B0]" checked={form.revealEmails} onChange={(e) => setForm({ ...form, revealEmails: e.target.checked })} />
             Revelar emails (usa créditos Apollo)
           </label>
           <label className="flex items-center gap-2 cursor-pointer text-sm">
-            <input type="checkbox" className="w-4 h-4 accent-teal-600" checked={form.revealPhones} onChange={(e) => setForm({ ...form, revealPhones: e.target.checked })} />
+            <input type="checkbox" className="w-4 h-4 accent-[#3E95B0]" checked={form.revealPhones} onChange={(e) => setForm({ ...form, revealPhones: e.target.checked })} />
             Revelar teléfonos personales
           </label>
         </div>
 
         <div className="flex items-center gap-3">
-          <button type="submit" disabled={saving} className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50">
+          <button type="submit" disabled={saving} className="px-4 py-2 bg-[#3E95B0] hover:bg-[#255664] text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50">
             {saving ? 'Guardando…' : saved ? '✓ Guardado' : 'Guardar configuración'}
           </button>
           <button
@@ -391,7 +391,7 @@ function BatchDetailPanel({ batchId, onClose }: { batchId: string; onClose: () =
                   <div className="flex-1 min-w-0">
                     <span className="font-medium text-sm text-gray-800">{co.inputName}</span>
                     {co.domain && <span className="ml-2 text-xs text-gray-400">{co.domain}</span>}
-                    {co.phone && <span className="ml-2 text-xs text-teal-600">📞 {co.phone}</span>}
+                    {co.phone && <span className="ml-2 text-xs text-[#3E95B0]">📞 {co.phone}</span>}
                     {co.error && <span className="ml-2 text-xs text-red-500">{co.error}</span>}
                   </div>
                   <span className="text-xs text-gray-400 shrink-0">{co.people.length} persona{co.people.length !== 1 ? 's' : ''}</span>
@@ -408,7 +408,7 @@ function BatchDetailPanel({ batchId, onClose }: { batchId: string; onClose: () =
                         </div>
                         <div className="shrink-0 space-y-0.5 text-right">
                           {p.emails[0] && (
-                            <div className="text-teal-600">{p.emails[0]}</div>
+                            <div className="text-[#3E95B0]">{p.emails[0]}</div>
                           )}
                           {p.personalPhone && (
                             <div className="text-gray-600">📞 {p.personalPhone}</div>
@@ -515,7 +515,7 @@ export function ProspectingPanel({ initialBatches, configured, isAdmin }: Props)
         <div>
           <label className="block text-xs text-gray-500 mb-1">Escribe los nombres de las empresas, uno por línea (máx. 200)</label>
           <textarea
-            className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none font-mono"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3E95B0] resize-none font-mono"
             style={{ height: '140px' }}
             value={companyInput}
             onChange={(e) => setCompanyInput(e.target.value)}
@@ -530,7 +530,7 @@ export function ProspectingPanel({ initialBatches, configured, isAdmin }: Props)
           <button
             onClick={handleLaunch}
             disabled={launching || !configured || !companyInput.trim()}
-            className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50"
+            className="px-4 py-2 bg-[#3E95B0] hover:bg-[#255664] text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50"
           >
             {launching ? 'Lanzando…' : '🚀 Lanzar prospección'}
           </button>
@@ -567,7 +567,7 @@ export function ProspectingPanel({ initialBatches, configured, isAdmin }: Props)
                 return (
                   <tr
                     key={b.id}
-                    className={`border-t border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer ${selectedBatchId === b.id ? 'bg-teal-50' : ''}`}
+                    className={`border-t border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer ${selectedBatchId === b.id ? 'bg-[#3E95B0]/10' : ''}`}
                     onClick={() => setSelectedBatchId(b.id === selectedBatchId ? null : b.id)}
                   >
                     <td className="px-5 py-3">

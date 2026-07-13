@@ -62,7 +62,7 @@ export function LandingPromptButton({ proposalId }: { proposalId: string }) {
               <div className="flex items-center gap-3">
                 <button
                   onClick={handleCopy}
-                  className="px-4 py-1.5 text-sm font-medium rounded-lg bg-teal-600 text-white hover:bg-teal-700 transition-colors"
+                  className="px-4 py-1.5 text-sm font-medium rounded-lg bg-[#3E95B0] text-white hover:bg-[#255664] transition-colors"
                 >
                   {copied ? '✓ Copiado' : 'Copiar prompt'}
                 </button>

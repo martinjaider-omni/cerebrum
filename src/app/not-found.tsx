@@ -7,7 +7,7 @@ export default function NotFound() {
         <p className="text-gray-500 text-sm mb-6">El recurso que buscas no existe o ha sido eliminado.</p>
         <a
           href="/"
-          className="inline-block bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors"
+          className="inline-block bg-[#3E95B0] hover:bg-[#255664] text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors"
         >
           Volver al inicio
         </a>

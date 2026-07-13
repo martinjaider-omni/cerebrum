@@ -78,9 +78,9 @@ export function DirectoryPanel() {
           placeholder="Buscar empresa, dominio o persona..."
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
-          className="flex-1 border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+          className="flex-1 border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3E95B0]"
         />
-        <button type="submit" className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition">
+        <button type="submit" className="px-4 py-2 bg-[#3E95B0] text-white text-sm font-medium rounded-lg hover:bg-[#255664] transition">
           Buscar
         </button>
         {search && (
@@ -112,7 +112,7 @@ export function DirectoryPanel() {
                   onClick={() => setExpandedId(isExpanded ? null : co.id)}
                   className="w-full text-left px-5 py-4 flex items-center gap-4 hover:bg-gray-50 transition"
                 >
-                  <div className="w-8 h-8 bg-teal-100 text-teal-700 rounded-lg flex items-center justify-center text-sm font-bold shrink-0">
+                  <div className="w-8 h-8 bg-[#3E95B0]/15 text-[#255664] rounded-lg flex items-center justify-center text-sm font-bold shrink-0">
                     {co.inputName.charAt(0).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -124,7 +124,7 @@ export function DirectoryPanel() {
                     </div>
                     <div className="flex items-center gap-3 mt-0.5">
                       {co.phone && (
-                        <span className="text-xs text-teal-600">📞 {co.phone}</span>
+                        <span className="text-xs text-[#3E95B0]">📞 {co.phone}</span>
                       )}
                       <span className="text-xs text-gray-400">
                         {co.people.length} contacto{co.people.length !== 1 ? 's' : ''}
@@ -160,7 +160,7 @@ export function DirectoryPanel() {
                             <td className="px-5 py-3 text-gray-600">{p.title || '—'}</td>
                             <td className="px-5 py-3">
                               {p.emails.length > 0 ? (
-                                <a href={`mailto:${p.emails[0]}`} className="text-teal-600 hover:underline">
+                                <a href={`mailto:${p.emails[0]}`} className="text-[#3E95B0] hover:underline">
                                   {p.emails[0]}
                                 </a>
                               ) : (
@@ -169,7 +169,7 @@ export function DirectoryPanel() {
                             </td>
                             <td className="px-5 py-3">
                               {p.personalPhone ? (
-                                <a href={`tel:${p.personalPhone}`} className="text-teal-600 hover:underline">
+                                <a href={`tel:${p.personalPhone}`} className="text-[#3E95B0] hover:underline">
                                   {p.personalPhone}
                                 </a>
                               ) : (

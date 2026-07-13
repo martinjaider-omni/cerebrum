@@ -12,23 +12,16 @@ interface UserRow {
   createdAt: Date
 }
 
-interface CatalogRow {
-  id: string
-  key: string
-  data: unknown
-  updatedAt: Date
-}
-
 interface Props {
   initialUsers: UserRow[]
-  initialCatalogs: CatalogRow[]
+  initialCatalogs: unknown[]
   currentUserId: string
 }
 
 // ── Shared styles ──────────────────────────────────────────────────────────────
 
-const inputCls = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500'
-const btnPrimary = 'px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50'
+const inputCls = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3E95B0]'
+const btnPrimary = 'px-4 py-2 bg-[#3E95B0] hover:bg-[#255664] text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50'
 const btnSecondary = 'px-3 py-1.5 border border-gray-300 hover:bg-gray-50 text-sm rounded-lg transition-colors'
 const btnDanger = 'px-3 py-1.5 border border-red-200 text-red-600 hover:bg-red-50 text-sm rounded-lg transition-colors'
 
@@ -136,8 +129,8 @@ function UsersTab({ initial, currentUserId }: { initial: UserRow[]; currentUserI
 
       {/* Create form */}
       {showCreate && (
-        <form onSubmit={handleCreate} className="bg-teal-50 border border-teal-200 rounded-xl p-5 space-y-3">
-          <h3 className="font-semibold text-sm text-teal-800">Nuevo usuario</h3>
+        <form onSubmit={handleCreate} className="bg-[#3E95B0]/10 border border-[#3E95B0]/30 rounded-xl p-5 space-y-3">
+          <h3 className="font-semibold text-sm text-[#255664]">Nuevo usuario</h3>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Nombre</label>
@@ -242,156 +235,16 @@ function UsersTab({ initial, currentUserId }: { initial: UserRow[]; currentUserI
   )
 }
 
-// ── Catalogs tab ───────────────────────────────────────────────────────────────
-
-function CatalogsTab({ initial }: { initial: CatalogRow[] }) {
-  const [catalogs, setCatalogs] = useState<CatalogRow[]>(initial)
-  const [activeKey, setActiveKey] = useState<string>(initial[0]?.key ?? '')
-  const [editJson, setEditJson] = useState<string>(() => {
-    const c = initial[0]
-    return c ? JSON.stringify(c.data, null, 2) : ''
-  })
-  const [jsonError, setJsonError] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-
-  function selectCatalog(key: string) {
-    const c = catalogs.find((c) => c.key === key)
-    if (!c) return
-    setActiveKey(key)
-    setEditJson(JSON.stringify(c.data, null, 2))
-    setJsonError(null)
-    setSaved(false)
-  }
-
-  function handleJsonChange(val: string) {
-    setEditJson(val)
-    setSaved(false)
-    try {
-      JSON.parse(val)
-      setJsonError(null)
-    } catch {
-      setJsonError('JSON inválido')
-    }
-  }
-
-  async function handleSave() {
-    if (jsonError) return
-    setSaving(true)
-    setSaved(false)
-    try {
-      const data = JSON.parse(editJson)
-      const res = await fetch('/api/admin/catalogs', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: activeKey, data }),
-      })
-      if (!res.ok) throw new Error('Error guardando')
-      const updated = await res.json()
-      setCatalogs((prev) => prev.map((c) => c.key === activeKey ? updated : c))
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
-    } catch {
-      setJsonError('Error guardando en servidor')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const CATALOG_LABELS: Record<string, string> = {
-    plans: 'Planes',
-    features: 'Funcionalidades',
-    technologies: 'Tecnologías',
-    defaultTexts: 'Textos por defecto',
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-800">Catálogos</h2>
-        <p className="text-xs text-gray-400">Los cambios se aplican a nuevas propuestas. El JSON se valida antes de guardar.</p>
-      </div>
-
-      <div className="flex gap-6">
-        {/* Sidebar keys */}
-        <div className="w-44 shrink-0 space-y-1">
-          {catalogs.map((c) => (
-            <button
-              key={c.key}
-              onClick={() => selectCatalog(c.key)}
-              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${activeKey === c.key ? 'bg-teal-600 text-white font-medium' : 'hover:bg-gray-100 text-gray-700'}`}
-            >
-              {CATALOG_LABELS[c.key] ?? c.key}
-            </button>
-          ))}
-        </div>
-
-        {/* JSON editor */}
-        <div className="flex-1 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-700">
-              {CATALOG_LABELS[activeKey] ?? activeKey}
-              <span className="ml-2 text-xs text-gray-400">key: {activeKey}</span>
-            </span>
-            <button
-              onClick={handleSave}
-              disabled={saving || !!jsonError}
-              className={btnPrimary}
-            >
-              {saving ? 'Guardando…' : saved ? '✓ Guardado' : 'Guardar cambios'}
-            </button>
-          </div>
-
-          <textarea
-            className={`w-full font-mono text-xs border rounded-xl p-4 resize-none focus:outline-none focus:ring-2 focus:ring-teal-500 ${jsonError ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}
-            style={{ height: '460px' }}
-            value={editJson}
-            onChange={(e) => handleJsonChange(e.target.value)}
-            spellCheck={false}
-          />
-
-          {jsonError && (
-            <p className="text-xs text-red-600">{jsonError}</p>
-          )}
-
-          <p className="text-xs text-gray-400">
-            Última modificación: {new Date(catalogs.find((c) => c.key === activeKey)?.updatedAt ?? '').toLocaleString('es-ES')}
-          </p>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // ── Main component ─────────────────────────────────────────────────────────────
 
-export function AdminPanel({ initialUsers, initialCatalogs, currentUserId }: Props) {
-  const [tab, setTab] = useState<'users' | 'catalogs'>('users')
-
+export function AdminPanel({ initialUsers, currentUserId }: Props) {
   return (
     <div className="p-8 max-w-5xl mx-auto">
       <div className="flex items-center gap-3 mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Administración</h1>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-xl w-fit">
-        <button
-          onClick={() => setTab('users')}
-          className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${tab === 'users' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-        >
-          Usuarios
-        </button>
-        <button
-          onClick={() => setTab('catalogs')}
-          className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${tab === 'catalogs' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-        >
-          Catálogos
-        </button>
-      </div>
-
-      {tab === 'users' && <UsersTab initial={initialUsers} currentUserId={currentUserId} />}
-      {tab === 'catalogs' && <CatalogsTab initial={initialCatalogs} />}
+      <UsersTab initial={initialUsers} currentUserId={currentUserId} />
     </div>
   )
 }

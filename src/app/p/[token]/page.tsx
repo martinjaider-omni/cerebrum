@@ -52,7 +52,7 @@ export default async function PublicProposalPage({ params }: { params: { token: 
           href={`/api/p/${params.token}/pdf`}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+          className="inline-flex items-center gap-2 bg-[#3E95B0] hover:bg-[#255664] text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
         >
           ↓ Descargar PDF
         </a>
