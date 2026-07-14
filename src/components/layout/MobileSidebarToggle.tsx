@@ -90,10 +90,16 @@ export function MobileSidebarToggle({ isAdmin, userName, userRole }: Props) {
             </a>
           ))}
           {isAdmin && (
-            <a href="/admin" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[#232323] hover:bg-[#3E95B0]/10 hover:text-[#3E95B0] transition-colors">
-              <span aria-hidden="true" className="text-base">⚙️</span>
-              <span>Admin</span>
-            </a>
+            <>
+              <a href="/settings" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[#232323] hover:bg-[#3E95B0]/10 hover:text-[#3E95B0] transition-colors">
+                <span aria-hidden="true" className="text-base">🔧</span>
+                <span>Ajustes</span>
+              </a>
+              <a href="/admin" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[#232323] hover:bg-[#3E95B0]/10 hover:text-[#3E95B0] transition-colors">
+                <span aria-hidden="true" className="text-base">👤</span>
+                <span>Usuarios</span>
+              </a>
+            </>
           )}
         </div>
         <div className="px-5 py-4 border-t border-gray-100">

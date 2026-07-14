@@ -46,233 +46,6 @@ interface Props {
   isAdmin: boolean
 }
 
-// ── Settings sub-panel (admin only) ───────────────────────────────────────────
-
-interface ServiceResult { ok: boolean; error?: string; detail?: string }
-
-interface TestStatus {
-  apollo: ServiceResult
-  attio: ServiceResult | null
-  anthropic: ServiceResult | null
-}
-
-function SettingsPanel({ onClose }: { onClose: () => void }) {
-  const [form, setForm] = useState({
-    apolloApiKey: '',
-    attioAccessToken: '',
-    attioListId: '',
-    anthropicApiKey: '',
-    stripeSecretKey: '',
-    icpTitles: '',
-    maxPeoplePerCompany: 3,
-    revealPhones: false,
-    revealEmails: true,
-  })
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [testing, setTesting] = useState(false)
-  const [testResult, setTestResult] = useState<TestStatus | null>(null)
-
-  useEffect(() => {
-    fetch('/api/settings/integrations')
-      .then((r) => r.json())
-      .then((d) => {
-        setForm({
-          apolloApiKey: d.apolloApiKey ?? '',
-          attioAccessToken: d.attioAccessToken ?? '',
-          attioListId: d.attioListId ?? '',
-          anthropicApiKey: d.anthropicApiKey ?? '',
-          stripeSecretKey: d.stripeSecretKey ?? '',
-          icpTitles: (d.icpTitles ?? []).join('\n'),
-          maxPeoplePerCompany: d.maxPeoplePerCompany ?? 3,
-          revealPhones: d.revealPhones ?? false,
-          revealEmails: d.revealEmails ?? true,
-        })
-        setLoading(false)
-      })
-  }, [])
-
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault()
-    setSaving(true)
-    setTestResult(null)
-    await fetch('/api/settings/integrations', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...form,
-        icpTitles: form.icpTitles.split('\n').map((s) => s.trim()).filter(Boolean),
-      }),
-    })
-    setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-  }
-
-  async function handleTest() {
-    setTesting(true)
-    setTestResult(null)
-    try {
-      const res = await fetch('/api/settings/integrations/test', { method: 'POST' })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error ?? 'Error')
-      setTestResult(json)
-    } catch {
-      setTestResult({
-        apollo: { ok: false, error: 'No se pudo ejecutar el test' },
-        attio: null,
-      })
-    } finally {
-      setTesting(false)
-    }
-  }
-
-  const inputCls = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3E95B0]'
-
-  if (loading) return <div className="p-6 text-sm text-gray-400">Cargando configuración…</div>
-
-  return (
-    <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-5">
-      <div className="flex items-center justify-between">
-        <h2 className="font-semibold text-gray-800">Configuración de integraciones</h2>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-sm">✕ Cerrar</button>
-      </div>
-
-      <form onSubmit={handleSave} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">Apollo API Key</label>
-            <input className={inputCls} type="password" value={form.apolloApiKey} onChange={(e) => setForm({ ...form, apolloApiKey: e.target.value })} placeholder="sk_apollo_…" autoComplete="off" />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">Attio Access Token</label>
-            <input className={inputCls} type="password" value={form.attioAccessToken} onChange={(e) => setForm({ ...form, attioAccessToken: e.target.value })} placeholder="attio_…" autoComplete="off" />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">Attio List ID <span className="text-gray-400 font-normal">(opcional)</span></label>
-            <input className={inputCls} value={form.attioListId} onChange={(e) => setForm({ ...form, attioListId: e.target.value })} placeholder="ID de la lista en Attio" />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">Max personas por empresa</label>
-            <input className={inputCls} type="number" min={1} max={10} value={form.maxPeoplePerCompany} onChange={(e) => setForm({ ...form, maxPeoplePerCompany: parseInt(e.target.value) || 3 })} />
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-xs font-semibold text-gray-600 mb-1">Anthropic API Key <span className="text-gray-400 font-normal">(para GTM Engineer)</span></label>
-          <input className={inputCls} type="password" value={form.anthropicApiKey} onChange={(e) => setForm({ ...form, anthropicApiKey: e.target.value })} placeholder="sk-ant-…" autoComplete="off" />
-        </div>
-
-        <div>
-          <label className="block text-xs font-semibold text-gray-600 mb-1">Stripe Secret Key <span className="text-gray-400 font-normal">(para Dashboard)</span></label>
-          <input className={inputCls} type="password" value={form.stripeSecretKey} onChange={(e) => setForm({ ...form, stripeSecretKey: e.target.value })} placeholder="sk_live_…" autoComplete="off" />
-        </div>
-
-        <div>
-          <label className="block text-xs font-semibold text-gray-600 mb-1">Títulos ICP <span className="text-gray-400 font-normal">(uno por línea, vacío = todos)</span></label>
-          <textarea
-            className={`${inputCls} h-24 resize-none font-mono`}
-            value={form.icpTitles}
-            onChange={(e) => setForm({ ...form, icpTitles: e.target.value })}
-            placeholder="Director of Marketing&#10;CMO&#10;Head of Growth"
-          />
-        </div>
-
-        <div className="flex gap-6">
-          <label className="flex items-center gap-2 cursor-pointer text-sm">
-            <input type="checkbox" className="w-4 h-4 accent-[#3E95B0]" checked={form.revealEmails} onChange={(e) => setForm({ ...form, revealEmails: e.target.checked })} />
-            Revelar emails (usa créditos Apollo)
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer text-sm">
-            <input type="checkbox" className="w-4 h-4 accent-[#3E95B0]" checked={form.revealPhones} onChange={(e) => setForm({ ...form, revealPhones: e.target.checked })} />
-            Revelar teléfonos personales
-          </label>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button type="submit" disabled={saving} className="px-4 py-2 bg-[#3E95B0] hover:bg-[#255664] text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50">
-            {saving ? 'Guardando…' : saved ? '✓ Guardado' : 'Guardar configuración'}
-          </button>
-          <button
-            type="button"
-            onClick={handleTest}
-            disabled={testing || saving}
-            className="px-4 py-2 border border-gray-300 hover:bg-gray-50 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
-          >
-            {testing ? 'Verificando…' : '🔌 Verificar conexiones'}
-          </button>
-        </div>
-      </form>
-
-      {/* Test results */}
-      {testResult && (
-        <div className="space-y-2 pt-2">
-          <div className={`flex items-center gap-3 rounded-lg px-4 py-3 text-sm ${testResult.apollo.ok ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
-            <span className="text-lg">{testResult.apollo.ok ? '✅' : '❌'}</span>
-            <div>
-              <p className={`font-semibold ${testResult.apollo.ok ? 'text-green-800' : 'text-red-800'}`}>
-                Apollo {testResult.apollo.ok ? 'conectado' : 'error'}
-              </p>
-              <p className={`text-xs ${testResult.apollo.ok ? 'text-green-600' : 'text-red-600'}`}>
-                {testResult.apollo.ok ? testResult.apollo.detail : testResult.apollo.error}
-              </p>
-            </div>
-          </div>
-
-          {testResult.attio && (
-            <div className={`flex items-center gap-3 rounded-lg px-4 py-3 text-sm ${testResult.attio.ok ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
-              <span className="text-lg">{testResult.attio.ok ? '✅' : '❌'}</span>
-              <div>
-                <p className={`font-semibold ${testResult.attio.ok ? 'text-green-800' : 'text-red-800'}`}>
-                  Attio {testResult.attio.ok ? 'conectado' : 'error'}
-                </p>
-                <p className={`text-xs ${testResult.attio.ok ? 'text-green-600' : 'text-red-600'}`}>
-                  {testResult.attio.ok ? testResult.attio.detail : testResult.attio.error}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {!form.attioAccessToken && !testResult.attio && (
-            <div className="flex items-center gap-3 rounded-lg px-4 py-3 text-sm bg-gray-50 border border-gray-200">
-              <span className="text-lg">⏭</span>
-              <div>
-                <p className="font-semibold text-gray-600">Attio no configurado</p>
-                <p className="text-xs text-gray-500">Opcional — agrega un token para sincronizar contactos</p>
-              </div>
-            </div>
-          )}
-
-          {testResult.anthropic && (
-            <div className={`flex items-center gap-3 rounded-lg px-4 py-3 text-sm ${testResult.anthropic.ok ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
-              <span className="text-lg">{testResult.anthropic.ok ? '✅' : '❌'}</span>
-              <div>
-                <p className={`font-semibold ${testResult.anthropic.ok ? 'text-green-800' : 'text-red-800'}`}>
-                  Anthropic (Claude) {testResult.anthropic.ok ? 'conectado' : 'error'}
-                </p>
-                <p className={`text-xs ${testResult.anthropic.ok ? 'text-green-600' : 'text-red-600'}`}>
-                  {testResult.anthropic.ok ? testResult.anthropic.detail : testResult.anthropic.error}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {!form.anthropicApiKey && !testResult.anthropic && (
-            <div className="flex items-center gap-3 rounded-lg px-4 py-3 text-sm bg-gray-50 border border-gray-200">
-              <span className="text-lg">⏭</span>
-              <div>
-                <p className="font-semibold text-gray-600">Anthropic no configurado</p>
-                <p className="text-xs text-gray-500">Necesario para el GTM Engineer</p>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ── Batch detail view ──────────────────────────────────────────────────────────
 
 interface SyncResult {
@@ -468,7 +241,6 @@ function BatchDetailPanel({ batchId, onClose }: { batchId: string; onClose: () =
 
 export function ProspectingPanel({ initialBatches, configured, isAdmin }: Props) {
   const [batches, setBatches] = useState<BatchRow[]>(initialBatches)
-  const [showSettings, setShowSettings] = useState(false)
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null)
   const [companyInput, setCompanyInput] = useState('')
   const [launching, setLaunching] = useState(false)
@@ -517,29 +289,15 @@ export function ProspectingPanel({ initialBatches, configured, isAdmin }: Props)
 
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Prospección</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Enriquecimiento de empresas via Apollo + Attio</p>
-        </div>
-        {isAdmin && (
-          <button
-            onClick={() => { setShowSettings((v) => !v); setSelectedBatchId(null) }}
-            className="px-4 py-2 border border-gray-300 hover:bg-gray-50 text-sm font-medium rounded-lg transition-colors"
-          >
-            ⚙️ Configuración
-          </button>
-        )}
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Prospección</h1>
+        <p className="text-sm text-gray-500 mt-0.5">Enriquecimiento de empresas via Apollo + Attio</p>
       </div>
 
-      {showSettings && isAdmin && <SettingsPanel onClose={() => setShowSettings(false)} />}
-
-      {!configured && !showSettings && (
+      {!configured && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
           <strong>Apollo API Key no configurada.</strong>{' '}
-          {isAdmin
-            ? 'Configura la integración pulsando "Configuración".'
-            : 'Pide al administrador que configure la integración con Apollo.'}
+          <a href="/settings" className="underline">Configúrala en Ajustes</a>.
         </div>
       )}
 
@@ -632,7 +390,7 @@ export function ProspectingPanel({ initialBatches, configured, isAdmin }: Props)
         </div>
       )}
 
-      {batches.length === 0 && !showSettings && (
+      {batches.length === 0 && (
         <div className="text-center py-12 text-gray-400">
           <p className="text-4xl mb-3">🔍</p>
           <p className="text-sm">No hay batches todavía. Lanza tu primera prospección.</p>
