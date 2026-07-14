@@ -14,7 +14,6 @@ interface UserRow {
 
 interface Props {
   initialUsers: UserRow[]
-  initialCatalogs: unknown[]
   currentUserId: string
 }
 
@@ -241,7 +240,7 @@ export function AdminPanel({ initialUsers, currentUserId }: Props) {
   return (
     <div className="p-8 max-w-5xl mx-auto">
       <div className="flex items-center gap-3 mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Administración</h1>
+        <h1 className="text-2xl font-bold text-[#232323]">Usuarios</h1>
       </div>
 
       <UsersTab initial={initialUsers} currentUserId={currentUserId} />

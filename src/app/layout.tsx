@@ -23,7 +23,7 @@ export const metadata: Metadata = {
   title: 'OmniWallet · Plataforma Comercial',
   description: 'Plataforma comercial del equipo OmniWallet: propuestas, prospección, CRM y GTM.',
   icons: {
-    icon: 'https://omniwallet.net/assets/images/favicon.ico',
+    icon: '/favicon.ico',
   },
 }
 

@@ -7,18 +7,14 @@ export default async function AdminPage() {
   const session = await auth()
   if ((session?.user as { role?: string })?.role !== 'admin') redirect('/')
 
-  const [users, catalogs] = await Promise.all([
-    db.user.findMany({
-      orderBy: { createdAt: 'asc' },
-      select: { id: true, name: true, email: true, role: true, createdAt: true },
-    }),
-    db.catalog.findMany({ orderBy: { key: 'asc' } }),
-  ])
+  const users = await db.user.findMany({
+    orderBy: { createdAt: 'asc' },
+    select: { id: true, name: true, email: true, role: true, createdAt: true },
+  })
 
   return (
     <AdminPanel
       initialUsers={users}
-      initialCatalogs={catalogs}
       currentUserId={(session!.user as { id?: string }).id ?? ''}
     />
   )
