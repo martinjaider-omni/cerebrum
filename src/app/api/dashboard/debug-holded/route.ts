@@ -12,7 +12,14 @@ export async function GET() {
     const holdedKey = (settings as Record<string, unknown>)?.holdedApiKey as string
     if (!holdedKey) return NextResponse.json({ error: 'No Holded key', keyLength: 0 })
 
-    const results: Record<string, unknown> = { keyLength: holdedKey.length }
+    const trimmedKey = holdedKey.trim()
+    const results: Record<string, unknown> = {
+      keyLength: holdedKey.length,
+      trimmedLength: trimmedKey.length,
+      keyStart: trimmedKey.slice(0, 4),
+      keyEnd: trimmedKey.slice(-4),
+      hasSpaces: holdedKey !== trimmedKey,
+    }
 
     // Try each endpoint one by one
     // Try different auth header formats
