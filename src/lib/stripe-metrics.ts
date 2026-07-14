@@ -26,6 +26,14 @@ export interface PlanMetrics {
   mrr: number
 }
 
+export interface MonthlySnapshot {
+  month: string        // "2024-01"
+  revenue: number      // total facturado ese mes
+  mrr: number          // MRR estimado al final del mes
+  customers: number    // clientes activos ese mes
+  newCustomers: number // altas ese mes
+}
+
 export interface SaasMetrics {
   mrr: number
   arr: number
@@ -35,9 +43,10 @@ export interface SaasMetrics {
   newCustomersThisMonth: number
   churnedThisMonth: number
   churnRate: number
-  avgRevenuePerCustomer: number   // solo sobre paying
+  avgRevenuePerCustomer: number
   planBreakdown: PlanMetrics[]
   customers: CustomerRecord[]
+  history: MonthlySnapshot[]
   sources: { stripe: boolean; holded: boolean }
 }
 
@@ -59,17 +68,27 @@ function detectPlan(items: Array<{ name: string; amount: number }>): PlanName {
 
 // ── Stripe ───────────────────────────────────────────────────────────────────
 
+interface InvoiceRecord {
+  amount: number
+  date: Date
+  customerEmail: string
+  customerName: string
+  source: 'stripe' | 'holded'
+  description: string
+}
+
 async function fetchStripeData(stripeKey: string): Promise<{
   customers: CustomerRecord[]
   churnedThisMonth: number
   freeCount: number
+  invoices: InvoiceRecord[]
 }> {
   async function stripeFetch(path: string, params?: Record<string, string>) {
     const url = new URL(`https://api.stripe.com/v1${path}`)
     if (params) Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
     const res = await fetch(url.toString(), {
       headers: { Authorization: `Bearer ${stripeKey}` },
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(30_000),
     })
     if (!res.ok) throw new Error(`Stripe ${res.status}`)
     return res.json()
@@ -156,12 +175,39 @@ async function fetchStripeData(stripeKey: string): Promise<{
     })
   }
 
-  return { customers, churnedThisMonth: canceledSubs.data?.length ?? 0, freeCount }
+  // Fetch ALL paid invoices for historical data (with pagination)
+  const allInvoices: InvoiceRecord[] = []
+  let hasMore = true
+  let startingAfter: string | undefined
+
+  while (hasMore) {
+    const params: Record<string, string> = { status: 'paid', limit: '100' }
+    if (startingAfter) params.starting_after = startingAfter
+
+    const page = await stripeFetch('/invoices', params)
+    for (const inv of page.data ?? []) {
+      const total = (inv.amount_paid ?? inv.total ?? 0) / 100
+      if (total <= 0) continue
+      allInvoices.push({
+        amount: total,
+        date: new Date((inv.created ?? inv.date ?? 0) * 1000),
+        customerEmail: (inv.customer_email ?? '').toLowerCase(),
+        customerName: inv.customer_name ?? '',
+        source: 'stripe',
+        description: inv.lines?.data?.[0]?.description ?? '',
+      })
+    }
+
+    hasMore = page.has_more ?? false
+    if (page.data?.length > 0) startingAfter = page.data[page.data.length - 1].id
+  }
+
+  return { customers, churnedThisMonth: canceledSubs.data?.length ?? 0, freeCount, invoices: allInvoices }
 }
 
 // ── Holded ───────────────────────────────────────────────────────────────────
 
-async function fetchHoldedCustomers(holdedKey: string): Promise<CustomerRecord[]> {
+async function fetchHoldedData(holdedKey: string): Promise<{ customers: CustomerRecord[]; invoices: InvoiceRecord[] }> {
   async function holdedFetch(path: string) {
     const res = await fetch(`https://api.holded.com/api${path}`, {
       headers: { Accept: 'application/json', key: holdedKey },
@@ -278,7 +324,25 @@ async function fetchHoldedCustomers(holdedKey: string): Promise<CustomerRecord[]
     })
   }
 
-  return customers
+  // Build invoice records for historical charts
+  const holdedInvoices: InvoiceRecord[] = []
+  for (const inv of invoices ?? []) {
+    if (!['paid', 'accepted'].includes(inv.status)) continue
+    const amount = inv.total ?? inv.subtotal ?? 0
+    if (amount <= 0) continue
+    const contactId = inv.contactId ?? inv.contact
+    const contact = contactMap.get(contactId) ?? { name: '', email: '' }
+    holdedInvoices.push({
+      amount,
+      date: new Date((inv.date ?? inv.createdAt ?? 0) * 1000),
+      customerEmail: contact.email,
+      customerName: contact.name,
+      source: 'holded',
+      description: inv.desc ?? '',
+    })
+  }
+
+  return { customers, invoices: holdedInvoices }
 }
 
 // ── Merge & Deduplicate ──────────────────────────────────────────────────────
@@ -325,24 +389,27 @@ export async function fetchSaasMetrics(): Promise<SaasMetrics | null> {
 
   let stripeCustomers: CustomerRecord[] = []
   let holdedCustomers: CustomerRecord[] = []
+  let allInvoices: InvoiceRecord[] = []
   let churnedThisMonth = 0
   let stripeFreeCount = 0
   const sources = { stripe: false, holded: false }
 
   const [stripeResult, holdedResult] = await Promise.allSettled([
     stripeKey ? fetchStripeData(stripeKey) : Promise.resolve(null),
-    holdedKey ? fetchHoldedCustomers(holdedKey) : Promise.resolve(null),
+    holdedKey ? fetchHoldedData(holdedKey) : Promise.resolve(null),
   ])
 
   if (stripeResult.status === 'fulfilled' && stripeResult.value) {
     stripeCustomers = stripeResult.value.customers
     churnedThisMonth = stripeResult.value.churnedThisMonth
     stripeFreeCount = stripeResult.value.freeCount
+    allInvoices.push(...stripeResult.value.invoices)
     sources.stripe = true
   }
 
   if (holdedResult.status === 'fulfilled' && holdedResult.value) {
-    holdedCustomers = holdedResult.value
+    holdedCustomers = holdedResult.value.customers
+    allInvoices.push(...holdedResult.value.invoices)
     sources.holded = true
   }
 
@@ -373,6 +440,41 @@ export async function fetchSaasMetrics(): Promise<SaasMetrics | null> {
     planMetrics.set(c.plan, pm)
   }
 
+  // ── Build monthly history from ALL invoices ──────────────────────────────
+  // Deduplicate invoices: same email + same month + similar amount = duplicate
+  const dedupedInvoices = deduplicateInvoices(allInvoices)
+
+  const monthlyMap = new Map<string, { revenue: number; customers: Set<string> }>()
+  for (const inv of dedupedInvoices) {
+    const monthKey = `${inv.date.getFullYear()}-${String(inv.date.getMonth() + 1).padStart(2, '0')}`
+    const entry = monthlyMap.get(monthKey) ?? { revenue: 0, customers: new Set() }
+    entry.revenue += inv.amount
+    const custKey = inv.customerEmail || inv.customerName.toLowerCase()
+    if (custKey) entry.customers.add(custKey)
+    monthlyMap.set(monthKey, entry)
+  }
+
+  // Sort months chronologically
+  const sortedMonths = Array.from(monthlyMap.keys()).sort()
+
+  // Calculate cumulative MRR (rolling 1-month revenue as proxy)
+  const history: MonthlySnapshot[] = []
+  let cumulativeCustomers = new Set<string>()
+  for (const month of sortedMonths) {
+    const data = monthlyMap.get(month)!
+    const prevSize = cumulativeCustomers.size
+    for (const c of data.customers) cumulativeCustomers.add(c)
+    const newCustomers = cumulativeCustomers.size - prevSize
+
+    history.push({
+      month,
+      revenue: Math.round(data.revenue * 100) / 100,
+      mrr: Math.round(data.revenue * 100) / 100, // monthly revenue ≈ MRR for that month
+      customers: data.customers.size,
+      newCustomers,
+    })
+  }
+
   return {
     mrr: Math.round(mrr * 100) / 100,
     arr: Math.round(mrr * 12 * 100) / 100,
@@ -385,6 +487,20 @@ export async function fetchSaasMetrics(): Promise<SaasMetrics | null> {
     avgRevenuePerCustomer: payingCustomers.length > 0 ? Math.round((mrr / payingCustomers.length) * 100) / 100 : 0,
     planBreakdown: Array.from(planMetrics.values()).filter((p) => p.total > 0),
     customers: allCustomers.sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime()),
+    history,
     sources,
   }
+}
+
+function deduplicateInvoices(invoices: InvoiceRecord[]): InvoiceRecord[] {
+  const seen = new Set<string>()
+  return invoices.filter((inv) => {
+    const monthKey = `${inv.date.getFullYear()}-${String(inv.date.getMonth() + 1).padStart(2, '0')}`
+    const custKey = (inv.customerEmail || inv.customerName).toLowerCase()
+    const amountKey = Math.round(inv.amount)
+    const key = `${monthKey}|${custKey}|${amountKey}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }

@@ -1,6 +1,15 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { RevenueChart, MrrChart, CustomersChart } from '@/components/dashboard/Charts'
+
+interface MonthlySnapshot {
+  month: string
+  revenue: number
+  mrr: number
+  customers: number
+  newCustomers: number
+}
 
 interface PlanMetrics {
   plan: string
@@ -36,6 +45,7 @@ interface Metrics {
   avgRevenuePerCustomer: number
   planBreakdown: PlanMetrics[]
   customers: CustomerRecord[]
+  history: MonthlySnapshot[]
   sources: { stripe: boolean; holded: boolean }
 }
 
@@ -162,6 +172,17 @@ export default function DashboardPage() {
           <p className="text-xs text-gray-400 mt-1">Altas en {new Date().toLocaleDateString('es-ES', { month: 'long' })}</p>
         </div>
       </div>
+
+      {/* Charts */}
+      {metrics.history && metrics.history.length > 1 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <RevenueChart data={metrics.history} />
+          <MrrChart data={metrics.history} />
+        </div>
+      )}
+      {metrics.history && metrics.history.length > 1 && (
+        <CustomersChart data={metrics.history} />
+      )}
 
       {/* Plan breakdown */}
       {metrics.planBreakdown.length > 0 && (
