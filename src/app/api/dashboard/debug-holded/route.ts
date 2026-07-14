@@ -9,80 +9,50 @@ export async function GET() {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const settings = await db.integrationSettings.findFirst()
-    const holdedKey = (settings as Record<string, unknown>)?.holdedApiKey as string
-    if (!holdedKey) return NextResponse.json({ error: 'No Holded key', keyLength: 0 })
+    const holdedKey = ((settings as Record<string, unknown>)?.holdedApiKey as string ?? '').trim()
+    if (!holdedKey) return NextResponse.json({ error: 'No Holded key' })
 
-    const trimmedKey = holdedKey.trim()
-    const results: Record<string, unknown> = {
-      keyLength: holdedKey.length,
-      trimmedLength: trimmedKey.length,
-      keyStart: trimmedKey.slice(0, 4),
-      keyEnd: trimmedKey.slice(-4),
-      hasSpaces: holdedKey !== trimmedKey,
-    }
+    const isPAT = holdedKey.startsWith('pat_')
+    const results: Record<string, unknown> = { keyLength: holdedKey.length, isPAT }
 
-    // Try each endpoint one by one
-    const trimKey = trimmedKey
-
-    // Try all combinations of base URL + auth + endpoint
+    // PAT uses different URL structure: /v1/invoicing/ instead of /invoicing/v1/
     const tests = [
-      // PAT format with Bearer on different base paths
-      { label: 'bearer /invoicing/v1/contacts', url: 'https://api.holded.com/api/invoicing/v1/contacts', headers: { Accept: 'application/json', Authorization: `Bearer ${trimKey}` } },
-      { label: 'bearer /v1/invoicing/contacts', url: 'https://api.holded.com/v1/invoicing/contacts', headers: { Accept: 'application/json', Authorization: `Bearer ${trimKey}` } },
-      { label: 'bearer /api/contacts', url: 'https://api.holded.com/api/contacts', headers: { Accept: 'application/json', Authorization: `Bearer ${trimKey}` } },
-      // Old key format
-      { label: 'key-header /invoicing/v1/contacts', url: 'https://api.holded.com/api/invoicing/v1/contacts', headers: { Accept: 'application/json', key: trimKey } },
-      // Try with Accept header variations
-      { label: 'bearer+json /invoicing/v1/contacts', url: 'https://api.holded.com/api/invoicing/v1/contacts', headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${trimKey}` } },
+      // PAT format (new API)
+      { label: 'PAT /v1/invoicing/contacts', url: 'https://api.holded.com/v1/invoicing/contacts', auth: `Bearer ${holdedKey}` },
+      { label: 'PAT /v1/invoicing/documents/invoice', url: 'https://api.holded.com/v1/invoicing/documents/invoice', auth: `Bearer ${holdedKey}` },
+      { label: 'PAT /v1/invoicing/documents/salesinvoice', url: 'https://api.holded.com/v1/invoicing/documents/salesinvoice', auth: `Bearer ${holdedKey}` },
+      { label: 'PAT /v1/invoicing/documents/salesreceipt', url: 'https://api.holded.com/v1/invoicing/documents/salesreceipt', auth: `Bearer ${holdedKey}` },
+      // Old API key format
+      { label: 'OLD /api/invoicing/v1/contacts', url: 'https://api.holded.com/api/invoicing/v1/contacts', auth: null, key: holdedKey },
     ]
 
     for (const test of tests) {
       try {
-        const res = await fetch(test.url, {
-          headers: test.headers,
-          signal: AbortSignal.timeout(10_000),
-        })
+        const headers: Record<string, string> = { Accept: 'application/json' }
+        if (test.auth) headers.Authorization = test.auth
+        if ('key' in test && test.key) headers.key = test.key
+
+        const res = await fetch(test.url, { headers, signal: AbortSignal.timeout(10_000) })
         const text = await res.text()
-        results[test.label] = { status: res.status, body: text.slice(0, 300) }
+        let parsed: unknown
+        try { parsed = JSON.parse(text) } catch { parsed = text.slice(0, 300) }
+
+        const isArr = Array.isArray(parsed)
+        results[test.label] = {
+          status: res.status,
+          isArray: isArr,
+          count: isArr ? parsed.length : null,
+          firstItemKeys: isArr && parsed.length > 0 ? Object.keys(parsed[0] as Record<string, unknown>) : null,
+          firstItem: isArr && parsed.length > 0 ? JSON.stringify(parsed[0]).slice(0, 600) : null,
+          body: isArr ? null : JSON.stringify(parsed).slice(0, 300),
+        }
       } catch (err) {
         results[test.label] = { error: String(err) }
       }
     }
 
-    // Also try listing documents with Bearer
-    const endpoints = [
-      '/invoicing/v1/documents/invoice',
-    ]
-
-    for (const ep of endpoints) {
-      try {
-        const res = await fetch(`https://api.holded.com/api${ep}`, {
-          headers: { Accept: 'application/json', Authorization: `Bearer ${trimKey}` },
-          signal: AbortSignal.timeout(10_000),
-        })
-        const text = await res.text()
-        let parsed: unknown
-        try { parsed = JSON.parse(text) } catch { parsed = text.slice(0, 500) }
-
-        results[ep] = {
-          status: res.status,
-          isArray: Array.isArray(parsed),
-          count: Array.isArray(parsed) ? parsed.length : null,
-          body: JSON.stringify(parsed).slice(0, 500),
-          sample: Array.isArray(parsed) && parsed.length > 0
-            ? Object.keys(parsed[0] as Record<string, unknown>)
-            : null,
-          firstItem: Array.isArray(parsed) && parsed.length > 0
-            ? JSON.stringify(parsed[0]).slice(0, 500)
-            : null,
-        }
-      } catch (err) {
-        results[ep] = { error: err instanceof Error ? err.message : String(err) }
-      }
-    }
-
     return NextResponse.json(results)
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 })
+    return NextResponse.json({ error: String(err) }, { status: 500 })
   }
 }
