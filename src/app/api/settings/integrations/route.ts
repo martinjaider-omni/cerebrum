@@ -20,6 +20,7 @@ export async function GET() {
       attioAccessToken: '',
       attioListId: '',
       anthropicApiKey: '',
+      stripeSecretKey: '',
       icpTitles: [],
       maxPeoplePerCompany: 3,
       revealPhones: false,
@@ -34,6 +35,7 @@ export async function GET() {
     apolloApiKey: isAdmin ? settings.apolloApiKey : settings.apolloApiKey ? '••••••••' : '',
     attioAccessToken: isAdmin ? settings.attioAccessToken : settings.attioAccessToken ? '••••••••' : '',
     anthropicApiKey: isAdmin ? settings.anthropicApiKey : settings.anthropicApiKey ? '••••••••' : '',
+    stripeSecretKey: isAdmin ? settings.stripeSecretKey : settings.stripeSecretKey ? '••••••••' : '',
   })
 }
 
@@ -42,6 +44,7 @@ const Schema = z.object({
   attioAccessToken: z.string().optional(),
   attioListId: z.string().optional(),
   anthropicApiKey: z.string().optional(),
+  stripeSecretKey: z.string().optional(),
   icpTitles: z.array(z.string()).optional(),
   maxPeoplePerCompany: z.number().int().min(1).max(10).optional(),
   revealPhones: z.boolean().optional(),

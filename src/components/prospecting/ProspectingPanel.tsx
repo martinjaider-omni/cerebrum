@@ -62,6 +62,7 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
     attioAccessToken: '',
     attioListId: '',
     anthropicApiKey: '',
+    stripeSecretKey: '',
     icpTitles: '',
     maxPeoplePerCompany: 3,
     revealPhones: false,
@@ -82,6 +83,7 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
           attioAccessToken: d.attioAccessToken ?? '',
           attioListId: d.attioListId ?? '',
           anthropicApiKey: d.anthropicApiKey ?? '',
+          stripeSecretKey: d.stripeSecretKey ?? '',
           icpTitles: (d.icpTitles ?? []).join('\n'),
           maxPeoplePerCompany: d.maxPeoplePerCompany ?? 3,
           revealPhones: d.revealPhones ?? false,
@@ -160,6 +162,11 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
         <div>
           <label className="block text-xs font-semibold text-gray-600 mb-1">Anthropic API Key <span className="text-gray-400 font-normal">(para GTM Engineer)</span></label>
           <input className={inputCls} type="password" value={form.anthropicApiKey} onChange={(e) => setForm({ ...form, anthropicApiKey: e.target.value })} placeholder="sk-ant-…" autoComplete="off" />
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 mb-1">Stripe Secret Key <span className="text-gray-400 font-normal">(para Dashboard)</span></label>
+          <input className={inputCls} type="password" value={form.stripeSecretKey} onChange={(e) => setForm({ ...form, stripeSecretKey: e.target.value })} placeholder="sk_live_…" autoComplete="off" />
         </div>
 
         <div>

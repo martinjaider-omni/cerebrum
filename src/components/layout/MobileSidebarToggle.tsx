@@ -9,8 +9,8 @@ interface Props {
 }
 
 const navLinks = [
-  { href: '/', label: 'Dashboard', icon: '📋' },
-  { href: '/proposals/new', label: 'Nueva propuesta', icon: '✏️' },
+  { href: '/', label: 'Dashboard', icon: '📊' },
+  { href: '/proposals', label: 'Propuestas', icon: '📋' },
   { href: '/prospecting', label: 'Prospección', icon: '🔍' },
   { href: '/directory', label: 'Directorio', icon: '👥' },
   { href: '/gtm', label: 'GTM Engineer', icon: '🎯' },

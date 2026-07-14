@@ -1,202 +1,202 @@
-import { auth } from '@/lib/auth'
-import { db } from '@/lib/db'
-import Link from 'next/link'
-import { Prisma } from '@prisma/client'
+'use client'
 
-const PAGE_SIZE = 20
+import { useState, useEffect } from 'react'
 
-export default async function DashboardPage({ searchParams }: { searchParams: { q?: string; status?: string; sort?: string; page?: string } }) {
-  const session = await auth()
-  if (!session?.user) return null
+interface PlanBreakdown {
+  plan: string
+  count: number
+  mrr: number
+}
 
-  const isAdmin = (session.user as { role?: string }).role === 'admin'
+interface RecentSubscription {
+  customer: string
+  email: string
+  plan: string
+  amount: number
+  status: string
+  created: string
+}
 
-  // Parse search params
-  const q = searchParams.q?.trim() || ''
-  const status = searchParams.status || ''
-  const sort = searchParams.sort || 'updatedAt'
-  const page = Math.max(1, parseInt(searchParams.page || '1', 10) || 1)
+interface Metrics {
+  configured: boolean
+  mrr: number
+  arr: number
+  totalCustomers: number
+  payingCustomers: number
+  newCustomersThisMonth: number
+  churnedThisMonth: number
+  churnRate: number
+  avgRevenuePerCustomer: number
+  planBreakdown: PlanBreakdown[]
+  recentSubscriptions: RecentSubscription[]
+}
 
-  // Build where clause
-  const where: Prisma.ProposalWhereInput = {
-    ...(isAdmin ? {} : { ownerId: session.user.id }),
-    ...(status === 'draft' || status === 'final' ? { status } : {}),
-    ...(q
-      ? {
-          OR: [
-            { name: { contains: q, mode: 'insensitive' as Prisma.QueryMode } },
-            { clientName: { contains: q, mode: 'insensitive' as Prisma.QueryMode } },
-          ],
-        }
-      : {}),
-  }
+function formatEur(value: number): string {
+  return value.toLocaleString('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 2 })
+}
 
-  // Build orderBy
-  const validSorts: Record<string, Prisma.ProposalOrderByWithRelationInput> = {
-    updatedAt: { updatedAt: 'desc' },
-    createdAt: { createdAt: 'desc' },
-    name: { name: 'desc' },
-    clientName: { clientName: 'desc' },
-  }
-  const orderBy = validSorts[sort] || validSorts.updatedAt
+export default function DashboardPage() {
+  const [metrics, setMetrics] = useState<Metrics | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  // Count + paginated query
-  const [totalCount, proposals] = await Promise.all([
-    db.proposal.count({ where }),
-    db.proposal.findMany({
-      where,
-      orderBy,
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
-      include: { owner: { select: { name: true } } },
-    }),
-  ])
+  useEffect(() => {
+    fetch('/api/dashboard/metrics')
+      .then((r) => {
+        if (!r.ok) throw new Error('Error cargando metricas')
+        return r.json()
+      })
+      .then((d) => {
+        setMetrics(d)
+        setLoading(false)
+      })
+      .catch((err) => {
+        setError(err.message)
+        setLoading(false)
+      })
+  }, [])
 
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
-
-  // Helper to build link hrefs preserving other params
-  function buildHref(overrides: Record<string, string | undefined>) {
-    const params = new URLSearchParams()
-    const merged = { q, status, sort, page: String(page), ...overrides }
-    for (const [k, v] of Object.entries(merged)) {
-      if (v && v !== '' && !(k === 'page' && v === '1') && !(k === 'sort' && v === 'updatedAt') && !(k === 'status' && v === 'all')) {
-        params.set(k, v)
-      }
-    }
-    const qs = params.toString()
-    return qs ? `/?${qs}` : '/'
-  }
-
-  return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Propuestas</h1>
-          <p className="text-gray-500 mt-1">{totalCount} propuesta{totalCount !== 1 ? 's' : ''}</p>
+  if (loading) {
+    return (
+      <div className="p-8 flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-[#3E95B0] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-sm text-gray-500">Cargando dashboard...</p>
         </div>
-        <Link
-          href="/proposals/new"
-          className="bg-[#3E95B0] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#255664] transition"
-        >
-          + Nueva propuesta
-        </Link>
       </div>
+    )
+  }
 
-      {/* Filter bar */}
-      <form method="GET" action="/" className="flex flex-wrap items-end gap-4 mb-6 bg-white rounded-xl border border-gray-200 p-4">
-        {/* Search */}
-        <div className="flex-1 min-w-[200px]">
-          <label htmlFor="q" className="block text-xs font-medium text-gray-500 mb-1">Buscar</label>
-          <input
-            id="q"
-            name="q"
-            type="text"
-            defaultValue={q}
-            placeholder="Nombre o cliente..."
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3E95B0] focus:border-[#3E95B0]"
-          />
+  if (error) {
+    return (
+      <div className="p-8">
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-800">
+          <strong>Error:</strong> {error}
         </div>
+      </div>
+    )
+  }
 
-        {/* Status filter */}
-        <div className="min-w-[140px]">
-          <label htmlFor="status" className="block text-xs font-medium text-gray-500 mb-1">Estado</label>
-          <select
-            id="status"
-            name="status"
-            defaultValue={status || 'all'}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#3E95B0] focus:border-[#3E95B0]"
-          >
-            <option value="all">Todos</option>
-            <option value="draft">Borrador</option>
-            <option value="final">Final</option>
-          </select>
-        </div>
-
-        {/* Sort */}
-        <div className="min-w-[160px]">
-          <label htmlFor="sort" className="block text-xs font-medium text-gray-500 mb-1">Ordenar por</label>
-          <select
-            id="sort"
-            name="sort"
-            defaultValue={sort}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#3E95B0] focus:border-[#3E95B0]"
-          >
-            <option value="updatedAt">Actualizado</option>
-            <option value="createdAt">Creado</option>
-            <option value="name">Nombre</option>
-            <option value="clientName">Cliente</option>
-          </select>
-        </div>
-
-        {/* Submit */}
-        <button
-          type="submit"
-          className="bg-[#3E95B0] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#255664] transition"
-        >
-          Filtrar
-        </button>
-      </form>
-
-      {proposals.length === 0 ? (
-        <div className="text-center py-16 text-gray-400">
-          <p className="text-lg">No hay propuestas todavia</p>
-          <p className="text-sm mt-1">
-            {q || status ? 'Intenta ajustar los filtros' : 'Crea tu primera propuesta para empezar'}
+  if (!metrics?.configured) {
+    return (
+      <div className="p-8">
+        <h1 className="text-2xl font-bold text-[#232323] mb-6">Dashboard</h1>
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-center">
+          <p className="text-4xl mb-3">📊</p>
+          <p className="text-sm text-amber-800 font-medium">
+            Configura la API key de Stripe en Prospeccion &rarr; Configuracion
+          </p>
+          <p className="text-xs text-amber-600 mt-1">
+            Una vez configurada, veras aqui las metricas SaaS de tu cuenta de Stripe.
           </p>
         </div>
-      ) : (
-        <>
-          <div className="grid gap-4">
-            {proposals.map((p) => (
-              <div key={p.id} className="bg-white rounded-xl border border-gray-200 p-5 flex items-center justify-between hover:shadow-sm transition">
-                <div>
-                  <h3 className="font-semibold text-gray-900">{p.name}</h3>
-                  <p className="text-sm text-gray-500 mt-0.5">
-                    {p.clientName || 'Sin cliente'} · {p.status === 'draft' ? 'Borrador' : 'Final'} · {isAdmin && `${p.owner.name} · `}
-                    {new Date(p.updatedAt).toLocaleDateString('es-ES')}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <Link href={`/proposals/${p.id}/edit`} className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition">Editar</Link>
-                  <Link href={`/proposals/${p.id}/preview`} className="px-3 py-1.5 text-sm bg-[#3E95B0]/10 text-[#255664] border border-[#3E95B0]/30 rounded-lg hover:bg-[#3E95B0]/15 transition">Ver</Link>
-                </div>
-              </div>
-            ))}
-          </div>
+      </div>
+    )
+  }
 
-          {/* Pagination */}
-          <div className="flex items-center justify-between mt-6">
-            <p className="text-sm text-gray-500">
-              Pagina {page} de {totalPages} ({totalCount} resultado{totalCount !== 1 ? 's' : ''})
-            </p>
-            <div className="flex gap-2">
-              {page > 1 ? (
-                <Link
-                  href={buildHref({ page: String(page - 1) })}
-                  className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition"
-                >
-                  Anterior
-                </Link>
-              ) : (
-                <span className="px-4 py-2 text-sm border border-gray-200 rounded-lg text-gray-300 cursor-not-allowed">
-                  Anterior
-                </span>
-              )}
-              {page < totalPages ? (
-                <Link
-                  href={buildHref({ page: String(page + 1) })}
-                  className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition"
-                >
-                  Siguiente
-                </Link>
-              ) : (
-                <span className="px-4 py-2 text-sm border border-gray-200 rounded-lg text-gray-300 cursor-not-allowed">
-                  Siguiente
-                </span>
-              )}
-            </div>
+  const cards = [
+    { label: 'MRR', value: formatEur(metrics.mrr), sub: 'Ingreso mensual recurrente' },
+    { label: 'ARR', value: formatEur(metrics.arr), sub: 'Ingreso anual recurrente' },
+    { label: 'Clientes activos', value: metrics.payingCustomers.toLocaleString('es-ES'), sub: 'Suscripciones activas' },
+    { label: 'Nuevos este mes', value: metrics.newCustomersThisMonth.toLocaleString('es-ES'), sub: 'Clientes nuevos' },
+    { label: 'Churn rate', value: `${metrics.churnRate}%`, sub: `${metrics.churnedThisMonth} cancelado${metrics.churnedThisMonth !== 1 ? 's' : ''} este mes` },
+    { label: 'ARPU', value: formatEur(metrics.avgRevenuePerCustomer), sub: 'Ingreso medio por cliente' },
+  ]
+
+  return (
+    <div className="p-8 max-w-6xl mx-auto space-y-8">
+      <div>
+        <h1 className="text-2xl font-bold text-[#232323]">Dashboard</h1>
+        <p className="text-sm text-gray-500 mt-1">Metricas SaaS en tiempo real desde Stripe</p>
+      </div>
+
+      {/* Metric cards */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        {cards.map((card) => (
+          <div key={card.label} className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-sm transition">
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">{card.label}</p>
+            <p className="text-xl font-bold text-[#232323] mt-1">{card.value}</p>
+            <p className="text-xs text-gray-400 mt-1">{card.sub}</p>
           </div>
-        </>
+        ))}
+      </div>
+
+      {/* Plan breakdown */}
+      {metrics.planBreakdown.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100">
+            <h2 className="font-semibold text-[#232323]">Desglose por plan</h2>
+          </div>
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+              <tr>
+                <th className="text-left px-5 py-2.5">Plan</th>
+                <th className="text-right px-5 py-2.5">Suscriptores</th>
+                <th className="text-right px-5 py-2.5">MRR</th>
+                <th className="text-right px-5 py-2.5">% del total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {metrics.planBreakdown.map((plan) => (
+                <tr key={plan.plan} className="border-t border-gray-100">
+                  <td className="px-5 py-3 font-medium text-[#232323]">{plan.plan}</td>
+                  <td className="px-5 py-3 text-right text-gray-600">{plan.count}</td>
+                  <td className="px-5 py-3 text-right text-gray-600">{formatEur(plan.mrr)}</td>
+                  <td className="px-5 py-3 text-right text-gray-400">
+                    {metrics.mrr > 0 ? `${Math.round((plan.mrr / metrics.mrr) * 100)}%` : '0%'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Recent subscriptions */}
+      {metrics.recentSubscriptions.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100">
+            <h2 className="font-semibold text-[#232323]">Suscripciones recientes</h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+                <tr>
+                  <th className="text-left px-5 py-2.5">Cliente</th>
+                  <th className="text-left px-5 py-2.5">Email</th>
+                  <th className="text-left px-5 py-2.5">Plan</th>
+                  <th className="text-right px-5 py-2.5">Importe</th>
+                  <th className="text-left px-5 py-2.5">Estado</th>
+                  <th className="text-left px-5 py-2.5">Fecha</th>
+                </tr>
+              </thead>
+              <tbody>
+                {metrics.recentSubscriptions.map((sub, i) => (
+                  <tr key={i} className="border-t border-gray-100 hover:bg-gray-50 transition">
+                    <td className="px-5 py-3 font-medium text-[#232323]">{sub.customer}</td>
+                    <td className="px-5 py-3 text-gray-500">{sub.email || '-'}</td>
+                    <td className="px-5 py-3 text-gray-600">{sub.plan}</td>
+                    <td className="px-5 py-3 text-right text-gray-600">{formatEur(sub.amount)}</td>
+                    <td className="px-5 py-3">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        sub.status === 'active'
+                          ? 'bg-green-100 text-green-700'
+                          : sub.status === 'canceled'
+                          ? 'bg-red-100 text-red-700'
+                          : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        {sub.status === 'active' ? 'Activo' : sub.status === 'canceled' ? 'Cancelado' : sub.status}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 text-gray-400 text-xs">
+                      {new Date(sub.created).toLocaleDateString('es-ES')}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
     </div>
   )
