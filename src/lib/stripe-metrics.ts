@@ -171,12 +171,13 @@ async function fetchHoldedCustomers(holdedKey: string): Promise<CustomerRecord[]
     return res.json()
   }
 
-  const contacts = await holdedFetch('/invoicing/v1/contacts?type=client')
-  const invoices = await holdedFetch('/invoicing/v1/documents/invoice')
+  // Load contacts and invoices in parallel
+  const [contacts, invoices] = await Promise.all([
+    holdedFetch('/invoicing/v1/contacts?type=client'),
+    holdedFetch('/invoicing/v1/documents/invoice'),
+  ])
 
-  const sixMonthsAgo = new Date()
-  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
-
+  // Build contact lookup
   const contactMap = new Map<string, { name: string; email: string }>()
   for (const c of contacts ?? []) {
     contactMap.set(c.id ?? c.contactId, {
@@ -185,42 +186,96 @@ async function fetchHoldedCustomers(holdedKey: string): Promise<CustomerRecord[]
     })
   }
 
-  const customerInvoices = new Map<string, { total: number; count: number; lastDate: number; items: string[] }>()
+  // Group invoices by contact — keep ALL paid invoices
+  const customerData = new Map<string, {
+    totalLast12m: number
+    invoiceCount: number
+    lastDate: number
+    firstDate: number
+    items: string[]
+    isAnnual: boolean
+  }>()
+
+  const twelveMonthsAgo = new Date()
+  twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12)
+
   for (const inv of invoices ?? []) {
-    if (inv.status !== 'paid' && inv.status !== 'accepted') continue
-    const date = (inv.date ?? inv.createdAt ?? 0) * 1000
-    if (date < sixMonthsAgo.getTime()) continue
+    // Accept paid, accepted, or pending invoices
+    if (!['paid', 'accepted'].includes(inv.status)) continue
 
     const contactId = inv.contactId ?? inv.contact
-    const existing = customerInvoices.get(contactId) ?? { total: 0, count: 0, lastDate: 0, items: [] }
-    existing.total += inv.total ?? inv.subtotal ?? 0
-    existing.count++
+    if (!contactId) continue
+
+    const date = (inv.date ?? inv.createdAt ?? 0) * 1000
+    const amount = inv.total ?? inv.subtotal ?? 0
+    const desc = (inv.desc ?? inv.notes ?? '').toLowerCase()
+
+    // Collect all item descriptions from invoice lines
+    const lineItems: string[] = []
+    if (inv.items && Array.isArray(inv.items)) {
+      for (const item of inv.items) {
+        if (item.name || item.desc) lineItems.push(item.name ?? item.desc)
+      }
+    }
+    if (lineItems.length === 0 && inv.desc) lineItems.push(inv.desc)
+
+    const existing = customerData.get(contactId) ?? {
+      totalLast12m: 0, invoiceCount: 0, lastDate: 0, firstDate: Infinity, items: [], isAnnual: false,
+    }
+
+    // Only count amounts from last 12 months for MRR calculation
+    if (date >= twelveMonthsAgo.getTime()) {
+      existing.totalLast12m += amount
+    }
+    existing.invoiceCount++
     existing.lastDate = Math.max(existing.lastDate, date)
-    if (inv.desc) existing.items.push(inv.desc)
-    customerInvoices.set(contactId, existing)
+    existing.firstDate = Math.min(existing.firstDate, date)
+    existing.items.push(...lineItems)
+
+    // Detect annual billing from description or amount
+    if (/anual|annual|12 meses|yearly/i.test(desc) || amount >= 400) {
+      existing.isAnnual = true
+    }
+
+    customerData.set(contactId, existing)
   }
 
+  // Build customer records from invoice data
   const customers: CustomerRecord[] = []
-  for (const [contactId, data] of customerInvoices) {
-    const contact = contactMap.get(contactId) ?? { name: contactId, email: '' }
-    const monthsSpan = Math.max(1, Math.ceil((Date.now() - sixMonthsAgo.getTime()) / (30 * 24 * 60 * 60 * 1000)))
-    const monthlyAmount = data.total / monthsSpan
+  for (const [contactId, data] of customerData) {
+    // Skip if no recent invoices (last 12 months)
+    if (data.totalLast12m === 0) continue
 
-    if (data.count >= 2 || monthlyAmount >= 30) {
-      const itemsForDetection = [{ name: data.items.join(' '), amount: monthlyAmount }]
-      customers.push({
-        customer: contact.name,
-        email: contact.email,
-        plan: detectPlan(itemsForDetection),
-        billingInterval: 'monthly',
-        totalAmount: Math.round(data.total * 100) / 100,
-        monthlyAmount: Math.round(monthlyAmount * 100) / 100,
-        status: 'active',
-        source: 'holded',
-        created: new Date(data.lastDate).toISOString(),
-        items: data.items.slice(0, 3),
-      })
+    const contact = contactMap.get(contactId) ?? { name: contactId, email: '' }
+
+    // Calculate monthly amount
+    let monthlyAmount: number
+    if (data.isAnnual) {
+      // Annual invoice — divide by 12
+      monthlyAmount = data.totalLast12m / 12
+    } else {
+      // Monthly — use average over the months we have data for
+      const monthsOfData = Math.max(1, Math.min(12,
+        Math.ceil((Date.now() - Math.max(data.firstDate, twelveMonthsAgo.getTime())) / (30 * 24 * 60 * 60 * 1000))
+      ))
+      monthlyAmount = data.totalLast12m / monthsOfData
     }
+
+    const itemsForDetection = data.items.map((name) => ({ name, amount: monthlyAmount }))
+    const plan = detectPlan(itemsForDetection)
+
+    customers.push({
+      customer: contact.name,
+      email: contact.email,
+      plan,
+      billingInterval: data.isAnnual ? 'annual' : 'monthly',
+      totalAmount: Math.round(data.totalLast12m * 100) / 100,
+      monthlyAmount: Math.round(monthlyAmount * 100) / 100,
+      status: 'active',
+      source: 'holded',
+      created: new Date(data.lastDate).toISOString(),
+      items: [...new Set(data.items)].slice(0, 5),
+    })
   }
 
   return customers
@@ -228,13 +283,30 @@ async function fetchHoldedCustomers(holdedKey: string): Promise<CustomerRecord[]
 
 // ── Merge & Deduplicate ──────────────────────────────────────────────────────
 
+function normalizeName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[.,\-_]/g, ' ')
+    .replace(/\b(s\.?l\.?u?\.?|s\.?a\.?|s\.?c\.?|ltd|gmbh|inc|corp)\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 function deduplicateCustomers(stripe: CustomerRecord[], holded: CustomerRecord[]): CustomerRecord[] {
+  // Build Stripe lookup sets
   const stripeEmails = new Set(stripe.filter((c) => c.email).map((c) => c.email))
-  const stripeNames = new Set(stripe.map((c) => c.customer.toLowerCase()))
+  const stripeNames = new Set(stripe.map((c) => normalizeName(c.customer)))
 
   const uniqueHolded = holded.filter((h) => {
+    // Match by email (exact)
     if (h.email && stripeEmails.has(h.email)) return false
-    if (stripeNames.has(h.customer.toLowerCase())) return false
+    // Match by normalized name (exact)
+    if (stripeNames.has(normalizeName(h.customer))) return false
+    // Match by name containment (one contains the other)
+    const hNorm = normalizeName(h.customer)
+    for (const sName of stripeNames) {
+      if (sName.includes(hNorm) || hNorm.includes(sName)) return false
+    }
     return true
   })
 
