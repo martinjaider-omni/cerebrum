@@ -15,11 +15,32 @@ export async function GET() {
     const results: Record<string, unknown> = { keyLength: holdedKey.length }
 
     // Try each endpoint one by one
+    // Try different auth header formats
+    const authVariants = [
+      { label: 'key-header', headers: { Accept: 'application/json', key: holdedKey } },
+      { label: 'bearer', headers: { Accept: 'application/json', Authorization: `Bearer ${holdedKey}` } },
+      { label: 'basic', headers: { Accept: 'application/json', Authorization: `Basic ${Buffer.from(holdedKey + ':').toString('base64')}` } },
+    ]
+
+    const testEndpoint = '/invoicing/v1/contacts'
+
+    for (const variant of authVariants) {
+      try {
+        const res = await fetch(`https://api.holded.com/api${testEndpoint}`, {
+          headers: variant.headers,
+          signal: AbortSignal.timeout(10_000),
+        })
+        const text = await res.text()
+        results[`auth:${variant.label}`] = { status: res.status, body: text.slice(0, 300) }
+      } catch (err) {
+        results[`auth:${variant.label}`] = { error: String(err) }
+      }
+    }
+
+    // Try endpoints with the key header
     const endpoints = [
       '/invoicing/v1/contacts',
-      '/invoicing/v1/contacts?type=client',
       '/invoicing/v1/documents/invoice',
-      '/invoicing/v1/documents/sales',
     ]
 
     for (const ep of endpoints) {
@@ -36,11 +57,10 @@ export async function GET() {
           status: res.status,
           isArray: Array.isArray(parsed),
           count: Array.isArray(parsed) ? parsed.length : null,
+          body: JSON.stringify(parsed).slice(0, 500),
           sample: Array.isArray(parsed) && parsed.length > 0
             ? Object.keys(parsed[0] as Record<string, unknown>)
-            : typeof parsed === 'object' && parsed !== null
-            ? Object.keys(parsed)
-            : String(parsed).slice(0, 200),
+            : null,
           firstItem: Array.isArray(parsed) && parsed.length > 0
             ? JSON.stringify(parsed[0]).slice(0, 500)
             : null,
