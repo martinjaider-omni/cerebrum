@@ -20,11 +20,33 @@ export async function GET() {
     return res.json()
   }
 
-  // Fetch first pages of contacts and invoices
-  const [contacts, invoices] = await Promise.all([
+  // Try different API paths to find the right one
+  const [contacts1, contacts2, contacts3, invoices1, invoices2, invoices3] = await Promise.all([
     holdedFetch('/invoicing/v1/contacts?type=client'),
+    holdedFetch('/invoicing/v1/contacts'),
+    holdedFetch('/contacts/v1/contacts'),
     holdedFetch('/invoicing/v1/documents/invoice'),
+    holdedFetch('/invoicing/v1/documents/sales'),
+    holdedFetch('/invoicing/v1/invoices'),
   ])
+
+  const contacts = Array.isArray(contacts1) && contacts1.length > 0 ? contacts1
+    : Array.isArray(contacts2) && contacts2.length > 0 ? contacts2
+    : Array.isArray(contacts3) && contacts3.length > 0 ? contacts3
+    : []
+  const invoices = Array.isArray(invoices1) && invoices1.length > 0 ? invoices1
+    : Array.isArray(invoices2) && invoices2.length > 0 ? invoices2
+    : Array.isArray(invoices3) && invoices3.length > 0 ? invoices3
+    : []
+
+  const apiResults = {
+    'invoicing/v1/contacts?type=client': Array.isArray(contacts1) ? contacts1.length : contacts1,
+    'invoicing/v1/contacts': Array.isArray(contacts2) ? contacts2.length : contacts2,
+    'contacts/v1/contacts': Array.isArray(contacts3) ? contacts3.length : contacts3,
+    'invoicing/v1/documents/invoice': Array.isArray(invoices1) ? invoices1.length : invoices1,
+    'invoicing/v1/documents/sales': Array.isArray(invoices2) ? invoices2.length : invoices2,
+    'invoicing/v1/invoices': Array.isArray(invoices3) ? invoices3.length : invoices3,
+  }
 
   // Search for "electro" in contacts
   const contactsList = Array.isArray(contacts) ? contacts : []
@@ -51,6 +73,7 @@ export async function GET() {
   })
 
   return NextResponse.json({
+    apiResults,
     totalContacts: contactsList.length,
     totalInvoices: invoicesList.length,
     invoiceStatusCounts: statusCounts,
