@@ -19,6 +19,7 @@ export async function GET() {
     attioListId: '',
     anthropicApiKey: '',
     stripeSecretKey: '',
+    holdedApiKey: '',
     icpTitles: [] as string[],
     maxPeoplePerCompany: 3,
     revealPhones: false,
@@ -40,6 +41,7 @@ export async function GET() {
       attioAccessToken: mask(s.attioAccessToken),
       anthropicApiKey: mask(s.anthropicApiKey),
       stripeSecretKey: mask(s.stripeSecretKey),
+      holdedApiKey: mask(s.holdedApiKey),
     })
   } catch {
     return NextResponse.json(defaults)
@@ -52,6 +54,7 @@ const Schema = z.object({
   attioListId: z.string().optional(),
   anthropicApiKey: z.string().optional(),
   stripeSecretKey: z.string().optional(),
+  holdedApiKey: z.string().optional(),
   icpTitles: z.array(z.string()).optional(),
   maxPeoplePerCompany: z.number().int().min(1).max(10).optional(),
   revealPhones: z.boolean().optional(),

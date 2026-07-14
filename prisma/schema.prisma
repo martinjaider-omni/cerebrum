@@ -117,6 +117,7 @@ model IntegrationSettings {
   attioListId         String   @default("")
   anthropicApiKey     String   @default("")
   stripeSecretKey     String   @default("")
+  holdedApiKey        String   @default("")
   icpTitles           String[]
   maxPeoplePerCompany Int      @default(3)
   revealPhones        Boolean  @default(false)

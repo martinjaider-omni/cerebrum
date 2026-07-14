@@ -14,6 +14,7 @@ interface RecentSubscription {
   plan: string
   amount: number
   status: string
+  source: 'stripe' | 'holded'
   created: string
 }
 
@@ -29,6 +30,7 @@ interface Metrics {
   avgRevenuePerCustomer: number
   planBreakdown: PlanBreakdown[]
   recentSubscriptions: RecentSubscription[]
+  sources: { stripe: boolean; holded: boolean }
 }
 
 function formatEur(value: number): string {
@@ -84,10 +86,10 @@ export default function DashboardPage() {
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-center">
           <p className="text-4xl mb-3">📊</p>
           <p className="text-sm text-amber-800 font-medium">
-            Configura la API key de Stripe en Prospeccion &rarr; Configuracion
+            Configura Stripe y/o Holded en <a href="/settings" className="underline">Ajustes</a>
           </p>
           <p className="text-xs text-amber-600 mt-1">
-            Una vez configurada, veras aqui las metricas SaaS de tu cuenta de Stripe.
+            Conecta al menos una fuente para ver las métricas SaaS. Los clientes se deduplicarán automáticamente.
           </p>
         </div>
       </div>
@@ -155,8 +157,12 @@ export default function DashboardPage() {
       {/* Recent subscriptions */}
       {metrics.recentSubscriptions.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100">
-            <h2 className="font-semibold text-[#232323]">Suscripciones recientes</h2>
+          <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
+            <h2 className="font-semibold text-[#232323]">Clientes activos</h2>
+            <div className="flex gap-1.5">
+              {metrics.sources?.stripe && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">Stripe</span>}
+              {metrics.sources?.holded && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Holded</span>}
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -166,7 +172,7 @@ export default function DashboardPage() {
                   <th className="text-left px-5 py-2.5">Email</th>
                   <th className="text-left px-5 py-2.5">Plan</th>
                   <th className="text-right px-5 py-2.5">Importe</th>
-                  <th className="text-left px-5 py-2.5">Estado</th>
+                  <th className="text-left px-5 py-2.5">Fuente</th>
                   <th className="text-left px-5 py-2.5">Fecha</th>
                 </tr>
               </thead>
@@ -179,13 +185,9 @@ export default function DashboardPage() {
                     <td className="px-5 py-3 text-right text-gray-600">{formatEur(sub.amount)}</td>
                     <td className="px-5 py-3">
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                        sub.status === 'active'
-                          ? 'bg-green-100 text-green-700'
-                          : sub.status === 'canceled'
-                          ? 'bg-red-100 text-red-700'
-                          : 'bg-gray-100 text-gray-600'
+                        sub.source === 'stripe' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
                       }`}>
-                        {sub.status === 'active' ? 'Activo' : sub.status === 'canceled' ? 'Cancelado' : sub.status}
+                        {sub.source === 'stripe' ? 'Stripe' : 'Holded'}
                       </span>
                     </td>
                     <td className="px-5 py-3 text-gray-400 text-xs">

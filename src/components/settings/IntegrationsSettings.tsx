@@ -17,6 +17,7 @@ export function IntegrationsSettings() {
     attioListId: '',
     anthropicApiKey: '',
     stripeSecretKey: '',
+    holdedApiKey: '',
     icpTitles: '',
     maxPeoplePerCompany: 3,
     revealPhones: false,
@@ -38,6 +39,7 @@ export function IntegrationsSettings() {
           attioListId: d.attioListId ?? '',
           anthropicApiKey: d.anthropicApiKey ?? '',
           stripeSecretKey: d.stripeSecretKey ?? '',
+          holdedApiKey: d.holdedApiKey ?? '',
           icpTitles: (d.icpTitles ?? []).join('\n'),
           maxPeoplePerCompany: d.maxPeoplePerCompany ?? 3,
           revealPhones: d.revealPhones ?? false,
@@ -113,6 +115,10 @@ export function IntegrationsSettings() {
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1">Stripe Secret Key <span className="text-gray-400 font-normal">(Dashboard)</span></label>
             <input className={inputCls} type="password" value={form.stripeSecretKey} onChange={(e) => setForm({ ...form, stripeSecretKey: e.target.value })} placeholder="sk_live_…" autoComplete="off" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">Holded API Key <span className="text-gray-400 font-normal">(Dashboard — clientes por transferencia)</span></label>
+            <input className={inputCls} type="password" value={form.holdedApiKey} onChange={(e) => setForm({ ...form, holdedApiKey: e.target.value })} placeholder="API key de Holded" autoComplete="off" />
           </div>
         </div>
 
