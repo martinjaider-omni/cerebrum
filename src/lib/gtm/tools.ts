@@ -504,16 +504,29 @@ export async function executeTool(name: string, input: Record<string, unknown>):
       const token = requireAttio(settings)
       if (!token) return JSON.stringify({ error: 'Attio not configured' })
       const recordType = (input.record_type as string) || 'companies'
-      const body: Record<string, unknown> = {
+
+      // Try format 1: flat fields
+      const body1 = {
+        parent_object: recordType,
+        parent_record_id: input.record_id,
+        ...(input.entry_values ? { entry_values: input.entry_values } : {}),
+      }
+      const res1 = await attioFetch(token, 'POST', `/lists/${input.list_id}/entries`, body1)
+      if (!res1.error) return slimResult(res1)
+
+      // Try format 2: wrapped in data
+      const body2 = {
         data: {
           parent_object: recordType,
           parent_record_id: input.record_id,
+          ...(input.entry_values ? { entry_values: input.entry_values } : {}),
         },
       }
-      if (input.entry_values) {
-        (body.data as Record<string, unknown>).entry_values = input.entry_values
-      }
-      return slimResult(await attioFetch(token, 'POST', `/lists/${input.list_id}/entries`, body))
+      const res2 = await attioFetch(token, 'POST', `/lists/${input.list_id}/entries`, body2)
+      if (!res2.error) return slimResult(res2)
+
+      // Both failed — return both errors for debugging
+      return JSON.stringify({ error: `Formato 1: ${res1.error}. Formato 2: ${res2.error}` })
     }
 
     if (name === 'attio_update_list_entry') {
