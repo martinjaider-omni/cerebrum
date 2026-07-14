@@ -12,42 +12,53 @@ export async function GET() {
     const holdedKey = ((settings as Record<string, unknown>)?.holdedApiKey as string ?? '').trim()
     if (!holdedKey) return NextResponse.json({ error: 'No Holded key' })
 
-    const isPAT = holdedKey.startsWith('pat_')
-    const results: Record<string, unknown> = { keyLength: holdedKey.length, isPAT }
+    const results: Record<string, unknown> = {}
+    const headers = { Accept: 'application/json', Authorization: `Bearer ${holdedKey}` }
 
-    // PAT uses different URL structure: /v1/invoicing/ instead of /invoicing/v1/
-    const tests = [
-      // PAT format (new API)
-      { label: 'PAT /v1/invoicing/contacts', url: 'https://api.holded.com/v1/invoicing/contacts', auth: `Bearer ${holdedKey}` },
-      { label: 'PAT /v1/invoicing/documents/invoice', url: 'https://api.holded.com/v1/invoicing/documents/invoice', auth: `Bearer ${holdedKey}` },
-      { label: 'PAT /v1/invoicing/documents/salesinvoice', url: 'https://api.holded.com/v1/invoicing/documents/salesinvoice', auth: `Bearer ${holdedKey}` },
-      { label: 'PAT /v1/invoicing/documents/salesreceipt', url: 'https://api.holded.com/v1/invoicing/documents/salesreceipt', auth: `Bearer ${holdedKey}` },
-      // Old API key format
-      { label: 'OLD /api/invoicing/v1/contacts', url: 'https://api.holded.com/api/invoicing/v1/contacts', auth: null, key: holdedKey },
+    // Try many path variations to find the correct ones
+    const paths = [
+      // Contacts
+      '/v1/contacts',
+      '/v1/contacts?type=client',
+      '/v1/crm/contacts',
+      '/v1/accounting/contacts',
+      // Invoices / Sales
+      '/v1/documents/invoice',
+      '/v1/documents/sales',
+      '/v1/sales/invoices',
+      '/v1/sales/documents',
+      '/v1/treasury/documents',
+      // With invoicing prefix
+      '/v1/invoicing/v1/contacts',
+      '/v1/invoicing/v1/documents/invoice',
     ]
 
-    for (const test of tests) {
+    for (const path of paths) {
       try {
-        const headers: Record<string, string> = { Accept: 'application/json' }
-        if (test.auth) headers.Authorization = test.auth
-        if ('key' in test && test.key) headers.key = test.key
-
-        const res = await fetch(test.url, { headers, signal: AbortSignal.timeout(10_000) })
+        const res = await fetch(`https://api.holded.com${path}`, {
+          headers, signal: AbortSignal.timeout(8_000),
+        })
         const text = await res.text()
         let parsed: unknown
-        try { parsed = JSON.parse(text) } catch { parsed = text.slice(0, 300) }
+        try { parsed = JSON.parse(text) } catch { parsed = text.slice(0, 200) }
 
         const isArr = Array.isArray(parsed)
-        results[test.label] = {
-          status: res.status,
-          isArray: isArr,
-          count: isArr ? parsed.length : null,
-          firstItemKeys: isArr && parsed.length > 0 ? Object.keys(parsed[0] as Record<string, unknown>) : null,
-          firstItem: isArr && parsed.length > 0 ? JSON.stringify(parsed[0]).slice(0, 600) : null,
-          body: isArr ? null : JSON.stringify(parsed).slice(0, 300),
+        const isUseful = isArr || (res.status !== 200) // skip 200 with "check docs"
+        const body = isArr ? null : JSON.stringify(parsed).slice(0, 200)
+        const isDocRedirect = body?.includes('developers.holded.com')
+
+        // Only show useful results (not the generic "check docs" response)
+        if (!isDocRedirect || !isArr) {
+          results[path] = {
+            status: res.status,
+            isArray: isArr,
+            count: isArr ? parsed.length : null,
+            firstKeys: isArr && parsed.length > 0 ? Object.keys(parsed[0] as Record<string, unknown>).slice(0, 15) : null,
+            body: isDocRedirect ? 'DOCS_REDIRECT' : (isArr ? `${parsed.length} items` : body),
+          }
         }
       } catch (err) {
-        results[test.label] = { error: String(err) }
+        results[path] = { error: String(err).slice(0, 100) }
       }
     }
 
