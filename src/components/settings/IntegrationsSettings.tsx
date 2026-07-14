@@ -45,6 +45,7 @@ export function IntegrationsSettings() {
         })
         setLoading(false)
       })
+      .catch(() => setLoading(false))
   }, [])
 
   async function handleSave(e: React.FormEvent) {

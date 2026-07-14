@@ -13,30 +13,37 @@ export async function GET() {
   const session = await auth()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const settings = await db.integrationSettings.findFirst()
-  if (!settings) {
-    return NextResponse.json({
-      apolloApiKey: '',
-      attioAccessToken: '',
-      attioListId: '',
-      anthropicApiKey: '',
-      stripeSecretKey: '',
-      icpTitles: [],
-      maxPeoplePerCompany: 3,
-      revealPhones: false,
-      revealEmails: true,
-    })
+  const defaults = {
+    apolloApiKey: '',
+    attioAccessToken: '',
+    attioListId: '',
+    anthropicApiKey: '',
+    stripeSecretKey: '',
+    icpTitles: [] as string[],
+    maxPeoplePerCompany: 3,
+    revealPhones: false,
+    revealEmails: true,
   }
 
-  // Mask secrets for non-admins
-  const isAdmin = (session.user as { role?: string }).role === 'admin'
-  return NextResponse.json({
-    ...settings,
-    apolloApiKey: isAdmin ? settings.apolloApiKey : settings.apolloApiKey ? '••••••••' : '',
-    attioAccessToken: isAdmin ? settings.attioAccessToken : settings.attioAccessToken ? '••••••••' : '',
-    anthropicApiKey: isAdmin ? settings.anthropicApiKey : settings.anthropicApiKey ? '••••••••' : '',
-    stripeSecretKey: isAdmin ? settings.stripeSecretKey : settings.stripeSecretKey ? '••••••••' : '',
-  })
+  try {
+    const settings = await db.integrationSettings.findFirst()
+    if (!settings) return NextResponse.json(defaults)
+
+    const s = settings as Record<string, unknown>
+    const isAdmin = (session.user as { role?: string }).role === 'admin'
+    const mask = (val: unknown) => isAdmin ? (val ?? '') : (val ? '••••••••' : '')
+
+    return NextResponse.json({
+      ...defaults,
+      ...settings,
+      apolloApiKey: mask(s.apolloApiKey),
+      attioAccessToken: mask(s.attioAccessToken),
+      anthropicApiKey: mask(s.anthropicApiKey),
+      stripeSecretKey: mask(s.stripeSecretKey),
+    })
+  } catch {
+    return NextResponse.json(defaults)
+  }
 }
 
 const Schema = z.object({
