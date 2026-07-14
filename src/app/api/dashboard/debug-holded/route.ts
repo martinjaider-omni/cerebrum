@@ -22,38 +22,42 @@ export async function GET() {
     }
 
     // Try each endpoint one by one
-    // Try different auth header formats
-    const authVariants = [
-      { label: 'key-header', headers: { Accept: 'application/json', key: holdedKey } },
-      { label: 'bearer', headers: { Accept: 'application/json', Authorization: `Bearer ${holdedKey}` } },
-      { label: 'basic', headers: { Accept: 'application/json', Authorization: `Basic ${Buffer.from(holdedKey + ':').toString('base64')}` } },
+    const trimKey = trimmedKey
+
+    // Try all combinations of base URL + auth + endpoint
+    const tests = [
+      // PAT format with Bearer on different base paths
+      { label: 'bearer /invoicing/v1/contacts', url: 'https://api.holded.com/api/invoicing/v1/contacts', headers: { Accept: 'application/json', Authorization: `Bearer ${trimKey}` } },
+      { label: 'bearer /v1/invoicing/contacts', url: 'https://api.holded.com/v1/invoicing/contacts', headers: { Accept: 'application/json', Authorization: `Bearer ${trimKey}` } },
+      { label: 'bearer /api/contacts', url: 'https://api.holded.com/api/contacts', headers: { Accept: 'application/json', Authorization: `Bearer ${trimKey}` } },
+      // Old key format
+      { label: 'key-header /invoicing/v1/contacts', url: 'https://api.holded.com/api/invoicing/v1/contacts', headers: { Accept: 'application/json', key: trimKey } },
+      // Try with Accept header variations
+      { label: 'bearer+json /invoicing/v1/contacts', url: 'https://api.holded.com/api/invoicing/v1/contacts', headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${trimKey}` } },
     ]
 
-    const testEndpoint = '/invoicing/v1/contacts'
-
-    for (const variant of authVariants) {
+    for (const test of tests) {
       try {
-        const res = await fetch(`https://api.holded.com/api${testEndpoint}`, {
-          headers: variant.headers,
+        const res = await fetch(test.url, {
+          headers: test.headers,
           signal: AbortSignal.timeout(10_000),
         })
         const text = await res.text()
-        results[`auth:${variant.label}`] = { status: res.status, body: text.slice(0, 300) }
+        results[test.label] = { status: res.status, body: text.slice(0, 300) }
       } catch (err) {
-        results[`auth:${variant.label}`] = { error: String(err) }
+        results[test.label] = { error: String(err) }
       }
     }
 
-    // Try endpoints with the key header
+    // Also try listing documents with Bearer
     const endpoints = [
-      '/invoicing/v1/contacts',
       '/invoicing/v1/documents/invoice',
     ]
 
     for (const ep of endpoints) {
       try {
         const res = await fetch(`https://api.holded.com/api${ep}`, {
-          headers: { Accept: 'application/json', key: holdedKey },
+          headers: { Accept: 'application/json', Authorization: `Bearer ${trimKey}` },
           signal: AbortSignal.timeout(10_000),
         })
         const text = await res.text()
