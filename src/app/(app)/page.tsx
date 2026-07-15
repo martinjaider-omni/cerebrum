@@ -60,11 +60,29 @@ const planColors: Record<string, string> = {
   Advanced: 'bg-[#3E95B0]/15 text-[#255664]',
 }
 
+type Period = 'this_month' | 'last_month' | 'this_quarter' | 'last_quarter' | 'this_year' | 'custom'
+
+function getPeriodRange(period: Period): { from: Date; to: Date } {
+  const now = new Date()
+  const y = now.getFullYear(), m = now.getMonth()
+  switch (period) {
+    case 'this_month': return { from: new Date(y, m, 1), to: now }
+    case 'last_month': return { from: new Date(y, m - 1, 1), to: new Date(y, m, 0) }
+    case 'this_quarter': { const q = Math.floor(m / 3) * 3; return { from: new Date(y, q, 1), to: now } }
+    case 'last_quarter': { const q = Math.floor(m / 3) * 3; return { from: new Date(y, q - 3, 1), to: new Date(y, q, 0) } }
+    case 'this_year': return { from: new Date(y, 0, 1), to: now }
+    default: return { from: new Date(y, 0, 1), to: now }
+  }
+}
+
 export default function DashboardPage() {
   const [metrics, setMetrics] = useState<Metrics | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | 'paying' | 'free'>('all')
+  const [period, setPeriod] = useState<Period>('this_month')
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
 
   useEffect(() => {
     fetch('/api/dashboard/metrics')
@@ -113,16 +131,66 @@ export default function DashboardPage() {
     return true
   })
 
+  // Filter history by period
+  const range = period === 'custom' && customFrom && customTo
+    ? { from: new Date(customFrom), to: new Date(customTo) }
+    : getPeriodRange(period)
+
+  const filteredHistory = (filteredHistory ?? []).filter((h) => {
+    const d = new Date(h.month + '-01')
+    return d >= range.from && d <= range.to
+  })
+
+  const periodRevenue = filteredHistory.reduce((s, h) => s + h.revenue, 0)
+
+  const periodLabels: Record<Period, string> = {
+    this_month: 'Este mes',
+    last_month: 'Mes anterior',
+    this_quarter: 'Trimestre actual',
+    last_quarter: 'Trimestre anterior',
+    this_year: 'Este año',
+    custom: 'Personalizado',
+  }
+
   return (
     <div className="p-8 max-w-6xl mx-auto space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-[#232323]">Dashboard</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Métricas SaaS
-          {metrics.sources?.stripe && metrics.sources?.holded ? ' — Stripe + Holded (deduplicado)' :
-           metrics.sources?.stripe ? ' — Stripe' :
-           metrics.sources?.holded ? ' — Holded' : ''}
-        </p>
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-[#232323]">Dashboard</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Métricas SaaS
+            {metrics.sources?.stripe && metrics.sources?.holded ? ' — Stripe + Holded' :
+             metrics.sources?.stripe ? ' — Stripe' :
+             metrics.sources?.holded ? ' — Holded' : ''}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <select
+            value={period}
+            onChange={(e) => setPeriod(e.target.value as Period)}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#3E95B0]"
+          >
+            {Object.entries(periodLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+          {period === 'custom' && (
+            <>
+              <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)}
+                className="border border-gray-300 rounded-lg px-2 py-2 text-sm" />
+              <span className="text-gray-400 text-sm">→</span>
+              <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)}
+                className="border border-gray-300 rounded-lg px-2 py-2 text-sm" />
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Period revenue summary */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4 flex items-center justify-between">
+        <div>
+          <p className="text-xs font-medium text-gray-500 uppercase">Facturado ({periodLabels[period]})</p>
+          <p className="text-2xl font-bold text-[#232323] mt-1">{formatEur(periodRevenue)}</p>
+          <p className="text-xs text-gray-400">{filteredHistory.length} mes{filteredHistory.length !== 1 ? 'es' : ''} · sin impuestos</p>
+        </div>
       </div>
 
       {/* Revenue cards */}
@@ -174,14 +242,14 @@ export default function DashboardPage() {
       </div>
 
       {/* Charts */}
-      {metrics.history && metrics.history.length > 1 && (
+      {filteredHistory && filteredHistory.length > 1 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <RevenueChart data={metrics.history} />
-          <MrrChart data={metrics.history} />
+          <RevenueChart data={filteredHistory} />
+          <MrrChart data={filteredHistory} />
         </div>
       )}
-      {metrics.history && metrics.history.length > 1 && (
-        <CustomersChart data={metrics.history} />
+      {filteredHistory && filteredHistory.length > 1 && (
+        <CustomersChart data={filteredHistory} />
       )}
 
       {/* Plan breakdown */}
