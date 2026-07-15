@@ -37,6 +37,39 @@ export const TOOL_DEFINITIONS = [
     },
   },
 
+  // ── Apollo: Lists ─────────────────────────────────────────────────────────
+  {
+    name: 'apollo_get_lists',
+    description: 'Get all saved lists in Apollo. Returns list names, IDs, contact counts.',
+    input_schema: { type: 'object' as const, properties: {}, required: [] },
+  },
+  {
+    name: 'apollo_get_list_contacts',
+    description: 'Get contacts/people from a specific Apollo saved list by list ID.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        list_id: { type: 'string', description: 'Apollo list ID' },
+        per_page: { type: 'number', description: 'Results per page (max 25, default 10)' },
+        page: { type: 'number', description: 'Page number (default 1)' },
+      },
+      required: ['list_id'],
+    },
+  },
+  {
+    name: 'apollo_get_list_companies',
+    description: 'Get companies/accounts from a specific Apollo saved list by list ID.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        list_id: { type: 'string', description: 'Apollo list ID' },
+        per_page: { type: 'number', description: 'Results per page (max 25, default 10)' },
+        page: { type: 'number', description: 'Page number (default 1)' },
+      },
+      required: ['list_id'],
+    },
+  },
+
   // ── Attio: Workspace & Schema ────────────────────────────────────────────
   {
     name: 'attio_get_workspace',
@@ -313,6 +346,18 @@ async function apolloFetch(apiKey: string, path: string, body: Record<string, un
   return res.json()
 }
 
+async function apolloGet(apiKey: string, path: string) {
+  const res = await fetch(`https://api.apollo.io/v1${path}`, {
+    headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey },
+    signal: AbortSignal.timeout(15_000),
+  })
+  if (!res.ok) {
+    const err = await res.text().catch(() => '')
+    return { error: `Apollo API ${res.status}: ${err}` }
+  }
+  return res.json()
+}
+
 async function attioFetch(token: string, method: string, path: string, body?: unknown) {
   const res = await fetch(`https://api.attio.com/v2${path}`, {
     method,
@@ -403,6 +448,41 @@ export async function executeTool(name: string, input: Record<string, unknown>):
       if (raw.error) return JSON.stringify(raw)
       const people = (raw.contacts ?? raw.people ?? []).map(slimApolloPerson)
       return slimResult({ people, total: raw.pagination?.total_entries })
+    }
+
+    // ── Apollo: Lists ──────────────────────────────────────────────────────
+    if (name === 'apollo_get_lists') {
+      if (!settings?.apolloApiKey) return JSON.stringify({ error: 'Apollo API key not configured' })
+      const raw = await apolloFetch(settings.apolloApiKey, '/labels', { page: 1, per_page: 50 })
+      if (raw.error) return JSON.stringify(raw)
+      const lists = (raw.labels ?? []).map((l: Record<string, unknown>) => ({
+        id: l.id, name: l.name, count: l.cached_count ?? l.count,
+      }))
+      return slimResult({ lists })
+    }
+
+    if (name === 'apollo_get_list_contacts') {
+      if (!settings?.apolloApiKey) return JSON.stringify({ error: 'Apollo API key not configured' })
+      const raw = await apolloFetch(settings.apolloApiKey, '/labels/search', {
+        label_ids: [input.list_id],
+        page: (input.page as number) ?? 1,
+        per_page: (input.per_page as number) ?? 10,
+      })
+      if (raw.error) return JSON.stringify(raw)
+      const contacts = (raw.contacts ?? raw.people ?? []).map(slimApolloPerson)
+      return slimResult({ contacts, total: raw.pagination?.total_entries })
+    }
+
+    if (name === 'apollo_get_list_companies') {
+      if (!settings?.apolloApiKey) return JSON.stringify({ error: 'Apollo API key not configured' })
+      const raw = await apolloFetch(settings.apolloApiKey, '/labels/search', {
+        label_ids: [input.list_id],
+        page: (input.page as number) ?? 1,
+        per_page: (input.per_page as number) ?? 10,
+      })
+      if (raw.error) return JSON.stringify(raw)
+      const companies = (raw.accounts ?? raw.organizations ?? []).map(slimApolloOrg)
+      return slimResult({ companies, total: raw.pagination?.total_entries })
     }
 
     // ── Attio: Workspace ───────────────────────────────────────────────────
