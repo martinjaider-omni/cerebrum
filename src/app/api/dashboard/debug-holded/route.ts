@@ -13,49 +13,46 @@ export async function GET() {
     if (!holdedKey) return NextResponse.json({ error: 'No Holded key' })
 
     const results: Record<string, unknown> = {}
+    const headers = { Accept: 'application/json', Authorization: `Bearer ${holdedKey}` }
 
-    async function tryFetch(label: string, url: string, opts: RequestInit) {
+    async function tryFetch(label: string, url: string) {
       try {
-        const res = await fetch(url, { ...opts, signal: AbortSignal.timeout(8_000) })
+        const res = await fetch(url, { headers, signal: AbortSignal.timeout(10_000) })
         const text = await res.text()
         let parsed: unknown
         try { parsed = JSON.parse(text) } catch { parsed = text.slice(0, 300) }
-        const isArr = Array.isArray(parsed)
+        const isObj = typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+        const items = isObj ? (parsed as Record<string, unknown>).items : Array.isArray(parsed) ? parsed : null
+        const isArr = Array.isArray(items)
         results[label] = {
           status: res.status,
-          isArray: isArr,
-          count: isArr ? parsed.length : null,
-          firstKeys: isArr && parsed.length > 0 ? Object.keys(parsed[0] as Record<string, unknown>).slice(0, 15) : null,
-          body: isArr ? `${parsed.length} items` : JSON.stringify(parsed).slice(0, 300),
+          hasItems: isArr,
+          count: isArr ? items.length : null,
+          topKeys: isObj ? Object.keys(parsed as Record<string, unknown>).slice(0, 10) : null,
+          firstKeys: isArr && items.length > 0 ? Object.keys(items[0] as Record<string, unknown>).slice(0, 20) : null,
+          firstItem: isArr && items.length > 0 ? JSON.stringify(items[0]).slice(0, 800) : null,
+          body: !isArr ? JSON.stringify(parsed).slice(0, 300) : null,
         }
       } catch (err) {
         results[label] = { error: String(err).slice(0, 100) }
       }
     }
 
-    const bearer = { Accept: 'application/json', Authorization: `Bearer ${holdedKey}` }
+    // v2 endpoints — contacts works, now find invoices/sales
+    await tryFetch('contacts', 'https://api.holded.com/api/v2/contacts')
+    await tryFetch('contacts?type=client', 'https://api.holded.com/api/v2/contacts?type=client')
+    await tryFetch('invoices', 'https://api.holded.com/api/v2/invoices')
+    await tryFetch('sales/invoices', 'https://api.holded.com/api/v2/sales/invoices')
+    await tryFetch('documents', 'https://api.holded.com/api/v2/documents')
+    await tryFetch('documents/invoices', 'https://api.holded.com/api/v2/documents/invoices')
+    await tryFetch('documents?type=invoice', 'https://api.holded.com/api/v2/documents?type=invoice')
+    await tryFetch('treasury', 'https://api.holded.com/api/v2/treasury')
+    await tryFetch('treasury/documents', 'https://api.holded.com/api/v2/treasury/documents')
+    await tryFetch('accounting/documents', 'https://api.holded.com/api/v2/accounting/documents')
 
-    // Try old API paths with Bearer (not key header)
-    await tryFetch('GET /api/invoicing/v1/contacts (Bearer)', 'https://api.holded.com/api/invoicing/v1/contacts', { headers: bearer })
-
-    // Try POST instead of GET
-    await tryFetch('POST /api/invoicing/v1/contacts (Bearer)', 'https://api.holded.com/api/invoicing/v1/contacts', { method: 'POST', headers: bearer })
-
-    // Try with apikey query param
-    await tryFetch('GET /api/invoicing/v1/contacts?apikey=', `https://api.holded.com/api/invoicing/v1/contacts?apikey=${holdedKey}`, { headers: { Accept: 'application/json' } })
-
-    // Try different base domains
-    await tryFetch('GET app.holded.com/api/invoicing/v1/contacts', `https://app.holded.com/api/invoicing/v1/contacts`, { headers: bearer })
-
-    // Try v2
-    await tryFetch('GET /api/v2/contacts', 'https://api.holded.com/api/v2/contacts', { headers: bearer })
-    await tryFetch('GET /api/v2/invoicing/contacts', 'https://api.holded.com/api/v2/invoicing/contacts', { headers: bearer })
-    await tryFetch('GET /api/v2/invoicing/documents', 'https://api.holded.com/api/v2/invoicing/documents', { headers: bearer })
-
-    // Try the exact Holded docs format
-    await tryFetch('GET /api/invoicing/v1/contacts (key header)', 'https://api.holded.com/api/invoicing/v1/contacts', {
-      headers: { Accept: 'application/json', key: holdedKey }
-    })
+    // Search for "electro" in contacts
+    await tryFetch('contacts?search=electro', 'https://api.holded.com/api/v2/contacts?search=electro')
+    await tryFetch('contacts?q=electro', 'https://api.holded.com/api/v2/contacts?q=electro')
 
     return NextResponse.json(results)
   } catch (err) {
