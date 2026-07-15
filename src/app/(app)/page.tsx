@@ -58,6 +58,7 @@ const planColors: Record<string, string> = {
   Starter: 'bg-blue-100 text-blue-700',
   Plus: 'bg-purple-100 text-purple-700',
   Advanced: 'bg-[#3E95B0]/15 text-[#255664]',
+  Legacy: 'bg-amber-100 text-amber-700',
 }
 
 type Period = 'this_month' | 'last_month' | 'this_quarter' | 'last_quarter' | 'this_year' | 'custom'

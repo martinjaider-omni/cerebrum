@@ -2,7 +2,7 @@ import { db } from './db'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-const PLAN_NAMES = ['Free', 'Starter', 'Plus', 'Advanced'] as const
+const PLAN_NAMES = ['Free', 'Starter', 'Plus', 'Advanced', 'Legacy'] as const
 type PlanName = typeof PLAN_NAMES[number]
 
 export interface CustomerRecord {
@@ -63,13 +63,21 @@ interface InvoiceRecord {
 let cache: { data: SaasMetrics; timestamp: number } | null = null
 const CACHE_TTL = 5 * 60 * 1000
 
+export function clearCache() { cache = null }
+
 // ── Plan detection ───────────────────────────────────────────────────────────
 
 function detectPlan(items: Array<{ name: string; amount: number }>): PlanName {
   const allNames = items.map((i) => i.name.toLowerCase()).join(' ')
+  // Legacy plans
+  if (/legacy/i.test(allNames)) return 'Legacy'
+  if (/one plan/i.test(allNames)) return 'Legacy'
+  // Current plans
   if (/advanced/i.test(allNames)) return 'Advanced'
   if (/plus/i.test(allNames)) return 'Plus'
   if (/starter/i.test(allNames)) return 'Starter'
+  if (/free/i.test(allNames) || /freemium/i.test(allNames)) return 'Free'
+  // By amount
   const totalMonthly = items.reduce((s, i) => s + i.amount, 0)
   if (totalMonthly >= 300) return 'Advanced'
   if (totalMonthly >= 150) return 'Plus'
@@ -121,14 +129,28 @@ async function fetchStripeData(stripeKey: string) {
     stripeFetchAll(stripeKey, '/invoices', { status: 'paid' }),
   ])
 
+  // Build map of latest invoice per subscription for REAL MRR (includes overages)
+  const latestInvoiceBySubscription = new Map<string, { subtotal: number; date: number }>()
+  for (const inv of allInvoicesRaw as Record<string, unknown>[]) {
+    const subId = inv.subscription as string
+    if (!subId) continue
+    const subtotal = ((inv.subtotal_excluding_tax as number) ?? (inv.subtotal as number) ?? 0) / 100
+    const created = (inv.created as number) ?? 0
+    const existing = latestInvoiceBySubscription.get(subId)
+    if (!existing || created > existing.date) {
+      latestInvoiceBySubscription.set(subId, { subtotal, date: created })
+    }
+  }
+
   const customers: CustomerRecord[] = []
   let freeCount = 0
 
   for (const sub of [...activeSubs, ...trialingSubs] as Record<string, unknown>[]) {
+    const subId = sub.id as string
     const itemsData = ((sub.items as Record<string, unknown>)?.data as Record<string, unknown>[]) ?? []
     if (itemsData.length === 0) continue
 
-    let totalMonthly = 0, totalAmount = 0, isAnnual = false
+    let planMonthly = 0, totalAmount = 0, isAnnual = false
     const itemNames: string[] = []
     const itemsForDetection: Array<{ name: string; amount: number }> = []
 
@@ -141,31 +163,41 @@ async function fetchStripeData(stripeKey: string) {
       const lineAmount = unitAmount * qty
       const interval = recurring?.interval as string
 
-      if (interval === 'year') { isAnnual = true; totalMonthly += lineAmount / 12; totalAmount += lineAmount }
-      else { totalMonthly += lineAmount; totalAmount += lineAmount }
+      if (interval === 'year') { isAnnual = true; planMonthly += lineAmount / 12; totalAmount += lineAmount }
+      else { planMonthly += lineAmount; totalAmount += lineAmount }
 
       const name = (price.nickname as string) ?? ''
       itemNames.push(name || String(price.product ?? ''))
       itemsForDetection.push({ name, amount: lineAmount / (interval === 'year' ? 12 : 1) })
     }
 
+    // Use REAL billed amount from latest invoice if available (captures overages)
+    const lastInvoice = latestInvoiceBySubscription.get(subId)
+    let realMonthly: number
+    if (lastInvoice && lastInvoice.subtotal > 0) {
+      // If annual, prorate; otherwise use as-is
+      realMonthly = isAnnual ? lastInvoice.subtotal / 12 : lastInvoice.subtotal
+    } else {
+      realMonthly = planMonthly
+    }
+
     const plan = detectPlan(itemsForDetection)
     const cust = typeof sub.customer === 'object' ? sub.customer as Record<string, unknown> : null
-    if (plan === 'Free' || totalMonthly === 0) freeCount++
+    if (plan === 'Free' || realMonthly === 0) freeCount++
 
     customers.push({
       customer: (cust?.name as string) ?? (cust?.id as string) ?? String(sub.customer),
       email: ((cust?.email as string) ?? '').toLowerCase(),
       plan, billingInterval: isAnnual ? 'annual' : 'monthly',
-      totalAmount: Math.round(totalAmount * 100) / 100,
-      monthlyAmount: Math.round(totalMonthly * 100) / 100,
+      totalAmount: lastInvoice ? Math.round(lastInvoice.subtotal * 100) / 100 : Math.round(totalAmount * 100) / 100,
+      monthlyAmount: Math.round(realMonthly * 100) / 100,
       status: sub.status as string, source: 'stripe',
       created: new Date(((sub.created as number) ?? 0) * 1000).toISOString(),
       items: itemNames,
     })
   }
 
-  // Use subtotal_excluding_tax or subtotal (without tax) for invoices
+  // Invoice records for historical charts (subtotal = sin impuestos)
   const invoices: InvoiceRecord[] = []
   for (const inv of allInvoicesRaw as Record<string, unknown>[]) {
     const subtotal = ((inv.subtotal_excluding_tax as number) ?? (inv.subtotal as number) ?? 0) / 100
@@ -234,7 +266,8 @@ async function fetchHoldedData(holdedKey: string) {
 
   for (const inv of invoices) {
     const status = inv.status as string
-    if (status !== 'paid' && status !== 'accepted' && status !== 'pending') continue
+    // Include all non-draft invoices (paid, accepted, pending, overdue, etc.)
+    if (status === 'draft') continue
 
     const contactId = (inv.contact_id ?? inv.contactId) as string
     if (!contactId) continue
