@@ -136,7 +136,7 @@ export default function DashboardPage() {
     ? { from: new Date(customFrom), to: new Date(customTo) }
     : getPeriodRange(period)
 
-  const filteredHistory = (filteredHistory ?? []).filter((h) => {
+  const filteredHistory = (metrics.history ?? []).filter((h) => {
     const d = new Date(h.month + '-01')
     return d >= range.from && d <= range.to
   })
