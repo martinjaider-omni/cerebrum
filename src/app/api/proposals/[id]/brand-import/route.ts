@@ -8,51 +8,18 @@ import { uploadFile } from '@/lib/storage'
 const BROWSER_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
 
-const FETCH_HEADERS: HeadersInit = {
-  'User-Agent': BROWSER_UA,
-  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/*,*/*;q=0.8',
-  'Accept-Language': 'es,en;q=0.9',
-}
-
-async function fetchWithPlaywright(url: string): Promise<{ html: string; downloadFn: (imgUrl: string) => Promise<Buffer>; cleanup: () => Promise<void> }> {
-  const { chromium } = await import('playwright')
-  const browser = await chromium.launch({ headless: true })
-  const context = await browser.newContext()
-  const page = await context.newPage()
-  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15_000 })
-  const html = await page.content()
-  return {
-    html,
-    downloadFn: async (imgUrl: string) => {
-      const res = await context.request.get(imgUrl, { timeout: 10_000 })
-      if (!res.ok()) throw new Error(`Image fetch failed: ${res.status()}`)
-      return Buffer.from(await res.body())
-    },
-    cleanup: () => browser.close(),
-  }
-}
-
-async function fetchWithNode(url: string): Promise<{ html: string; downloadFn: (imgUrl: string) => Promise<Buffer>; cleanup: () => Promise<void> }> {
+async function downloadImage(url: string): Promise<Buffer> {
   const res = await fetch(url, {
-    headers: FETCH_HEADERS,
+    headers: { 'User-Agent': BROWSER_UA },
     redirect: 'follow',
     signal: AbortSignal.timeout(10_000),
   })
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  const html = await res.text()
-  return {
-    html,
-    downloadFn: async (imgUrl: string) => {
-      const imgRes = await fetch(imgUrl, {
-        headers: FETCH_HEADERS,
-        redirect: 'follow',
-        signal: AbortSignal.timeout(10_000),
-      })
-      if (!imgRes.ok) throw new Error(`Image fetch failed: ${imgRes.status}`)
-      return Buffer.from(await imgRes.arrayBuffer())
-    },
-    cleanup: async () => {},
-  }
+  if (!res.ok) throw new Error(`Image fetch failed: ${res.status}`)
+  return Buffer.from(await res.arrayBuffer())
+}
+
+function getDomain(url: string): string {
+  try { return new URL(url).hostname } catch { return url }
 }
 
 function candidateLogos($: ReturnType<typeof cheerio.load>, baseUrl: string): string[] {
@@ -84,6 +51,24 @@ function candidateLogos($: ReturnType<typeof cheerio.load>, baseUrl: string): st
     .filter((s): s is string => !!s)
 }
 
+async function fetchHtmlSafe(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': BROWSER_UA,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'es,en;q=0.9',
+      },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (!res.ok) return null
+    return await res.text()
+  } catch {
+    return null
+  }
+}
+
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
   try {
     const session = await auth()
@@ -100,84 +85,90 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     if (!url) return NextResponse.json({ error: 'No clientUrl set on proposal' }, { status: 400 })
 
     const baseUrl = url.startsWith('http') ? url : `https://${url}`
+    const domain = getDomain(baseUrl)
 
-    // Try Playwright first (bypasses Cloudflare), fallback to fetch
-    let fetcher: Awaited<ReturnType<typeof fetchWithPlaywright>>
-    try {
-      fetcher = await fetchWithPlaywright(baseUrl)
-    } catch {
+    // Build logo candidates from multiple sources
+    const logoSources: string[] = []
+
+    // 1. Google Favicon API (high-res, always works)
+    logoSources.push(`https://www.google.com/s2/favicons?domain=${domain}&sz=128`)
+
+    // 2. Clearbit Logo API (real company logos, not just favicons)
+    logoSources.push(`https://logo.clearbit.com/${domain}`)
+
+    // 3. Direct favicon paths (no scraping needed)
+    logoSources.push(`${baseUrl}/favicon.ico`)
+    logoSources.push(`${baseUrl}/apple-touch-icon.png`)
+    logoSources.push(`${baseUrl}/favicon.png`)
+
+    // 4. Try scraping HTML for more candidates (best effort, may fail with 403)
+    const html = await fetchHtmlSafe(baseUrl)
+    if (html) {
+      const $ = cheerio.load(html)
+      logoSources.push(...candidateLogos($, baseUrl))
+    }
+
+    let brandLogoUrl: string | null = null
+    let palette: string[] = []
+    let brandPrimary = proposal.brandPrimary
+    let brandSecondary = proposal.brandSecondary
+
+    // Try each source until one works
+    for (const logoSrc of logoSources) {
       try {
-        fetcher = await fetchWithNode(baseUrl)
-      } catch (err) {
-        return NextResponse.json({ error: `Could not fetch URL: ${String(err)}` }, { status: 422 })
-      }
-    }
+        const buf = await downloadImage(logoSrc)
+        if (buf.length < 100) continue // skip tiny/empty responses
 
-    try {
-      const $ = cheerio.load(fetcher.html)
-      const logos = candidateLogos($, baseUrl)
+        const mime = logoSrc.match(/\.svg(\?|$)/i) ? 'image/svg+xml' : 'image/png'
 
-      let brandLogoUrl: string | null = null
-      let palette: string[] = []
-      let brandPrimary = proposal.brandPrimary
-      let brandSecondary = proposal.brandSecondary
+        if (mime !== 'image/svg+xml') {
+          const vibrant = await Vibrant.from(buf).getPalette()
+          const swatches = [
+            vibrant.Vibrant,
+            vibrant.DarkVibrant,
+            vibrant.LightVibrant,
+            vibrant.Muted,
+            vibrant.DarkMuted,
+            vibrant.LightMuted,
+          ]
+            .filter(Boolean)
+            .map((s) => s!.hex)
 
-      for (const logoSrc of logos) {
-        try {
-          const buf = await fetcher.downloadFn(logoSrc)
-          const mime = logoSrc.match(/\.svg(\?|$)/i) ? 'image/svg+xml' : 'image/png'
-
-          if (mime !== 'image/svg+xml') {
-            const vibrant = await Vibrant.from(buf).getPalette()
-            const swatches = [
-              vibrant.Vibrant,
-              vibrant.DarkVibrant,
-              vibrant.LightVibrant,
-              vibrant.Muted,
-              vibrant.DarkMuted,
-              vibrant.LightMuted,
-            ]
-              .filter(Boolean)
-              .map((s) => s!.hex)
-
-            if (swatches.length >= 2) {
-              brandPrimary = swatches[0]
-              brandSecondary = swatches[1]
-              palette = swatches
-            }
+          if (swatches.length >= 2) {
+            brandPrimary = swatches[0]
+            brandSecondary = swatches[1]
+            palette = swatches
           }
-
-          const ext = logoSrc.match(/\.(svg|png|jpg|jpeg|webp|ico)(\?|$)/i)?.[1] ?? 'png'
-          const key = `logos/${params.id}.${ext}`
-          const storedPath = await uploadFile(key, buf, mime)
-          brandLogoUrl = storedPath
-
-          break
-        } catch {
-          continue
         }
+
+        const ext = logoSrc.match(/\.(svg|png|jpg|jpeg|webp|ico)(\?|$)/i)?.[1] ?? 'png'
+        const key = `logos/${params.id}.${ext}`
+        const storedPath = await uploadFile(key, buf, mime)
+        brandLogoUrl = storedPath
+
+        break
+      } catch {
+        continue
       }
-
-      const updated = await db.proposal.update({
-        where: { id: params.id },
-        data: {
-          ...(brandLogoUrl ? { brandLogoUrl } : {}),
-          brandPrimary,
-          brandSecondary,
-          brandPalette: palette,
-        },
-      })
-
-      return NextResponse.json({
-        brandLogoUrl: updated.brandLogoUrl,
-        brandPrimary: updated.brandPrimary,
-        brandSecondary: updated.brandSecondary,
-        brandPalette: updated.brandPalette,
-        logosFound: logos.length,
-      })
-    } finally {
-      await fetcher.cleanup()
     }
+
+    const updated = await db.proposal.update({
+      where: { id: params.id },
+      data: {
+        ...(brandLogoUrl ? { brandLogoUrl } : {}),
+        brandPrimary,
+        brandSecondary,
+        brandPalette: palette,
+      },
+    })
+
+    return NextResponse.json({
+      brandLogoUrl: updated.brandLogoUrl,
+      brandPrimary: updated.brandPrimary,
+      brandSecondary: updated.brandSecondary,
+      brandPalette: updated.brandPalette,
+      logosFound: logoSources.length,
+    })
   } catch (err) {
     console.error('brand-import error:', err)
     return NextResponse.json({ error: `Error interno: ${String(err)}` }, { status: 500 })
