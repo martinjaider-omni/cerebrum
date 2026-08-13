@@ -6,6 +6,7 @@ import { signOut } from 'next-auth/react'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard,
+  FileText,
   FilePlus,
   Users,
   BookUser,
@@ -15,6 +16,7 @@ import {
 
 const baseLinks = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/proposals', label: 'Propuestas', icon: FileText },
   { href: '/proposals/new', label: 'Nueva Propuesta', icon: FilePlus },
   { href: '/prospecting', label: 'Prospección', icon: Users },
   { href: '/directory', label: 'Directorio', icon: BookUser },

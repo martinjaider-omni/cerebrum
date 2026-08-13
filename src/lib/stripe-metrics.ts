@@ -32,6 +32,7 @@ export interface MonthlySnapshot {
   mrr: number
   customers: number
   newCustomers: number
+  churnedCustomers: number
 }
 
 export interface SaasMetrics {
@@ -47,6 +48,7 @@ export interface SaasMetrics {
   planBreakdown: PlanMetrics[]
   customers: CustomerRecord[]
   history: MonthlySnapshot[]
+  newPayingThisMonth: number
   sources: { stripe: boolean; holded: boolean }
 }
 
@@ -56,6 +58,7 @@ interface InvoiceRecord {
   customerEmail: string
   customerName: string
   source: 'stripe' | 'holded'
+  billingInterval: 'monthly' | 'annual'
 }
 
 // ── Cache ────────────────────────────────────────────────────────────────────
@@ -143,6 +146,7 @@ async function fetchStripeData(stripeKey: string) {
   }
 
   const customers: CustomerRecord[] = []
+  const subIntervalMap = new Map<string, 'monthly' | 'annual'>()
   let freeCount = 0
 
   for (const sub of [...activeSubs, ...trialingSubs] as Record<string, unknown>[]) {
@@ -181,6 +185,7 @@ async function fetchStripeData(stripeKey: string) {
       realMonthly = planMonthly
     }
 
+    subIntervalMap.set(subId, isAnnual ? 'annual' : 'monthly')
     const plan = detectPlan(itemsForDetection)
     const cust = typeof sub.customer === 'object' ? sub.customer as Record<string, unknown> : null
     if (plan === 'Free' || realMonthly === 0) freeCount++
@@ -202,12 +207,14 @@ async function fetchStripeData(stripeKey: string) {
   for (const inv of allInvoicesRaw as Record<string, unknown>[]) {
     const subtotal = ((inv.subtotal_excluding_tax as number) ?? (inv.subtotal as number) ?? 0) / 100
     if (subtotal <= 0) continue
+    const invSubId = inv.subscription as string
     invoices.push({
       amount: subtotal,
       date: new Date(((inv.created as number) ?? 0) * 1000),
       customerEmail: ((inv.customer_email as string) ?? '').toLowerCase(),
       customerName: (inv.customer_name as string) ?? '',
       source: 'stripe',
+      billingInterval: subIntervalMap.get(invSubId) ?? 'monthly',
     })
   }
 
@@ -282,16 +289,19 @@ async function fetchHoldedData(holdedKey: string) {
 
     const contact = contactMap.get(contactId) ?? { name: (inv.contact_name as string) ?? contactId, email: '' }
 
+    const desc = ((inv.description as string) ?? '').toLowerCase()
+    const isAnnualInv = /anual|annual|12 meses|yearly/i.test(desc) || subtotal >= 400
+
     allInvoices.push({
       amount: subtotal,
       date: new Date(dateMs),
       customerEmail: contact.email,
       customerName: contact.name,
       source: 'holded',
+      billingInterval: isAnnualInv ? 'annual' : 'monthly',
     })
 
     // Aggregate for customer records
-    const desc = ((inv.description as string) ?? '').toLowerCase()
     const existing = customerData.get(contactId) ?? {
       total: 0, invoiceCount: 0, lastDate: 0, firstDate: Infinity, items: [], isAnnual: false,
     }
@@ -347,7 +357,7 @@ async function fetchHoldedData(holdedKey: string) {
       totalAmount: Math.round(data.total * 100) / 100,
       monthlyAmount: Math.round(monthlyAmount * 100) / 100,
       status: 'active', source: 'holded',
-      created: new Date(data.lastDate).toISOString(),
+      created: new Date(data.firstDate).toISOString(),
       items: [...new Set(data.items)].slice(0, 5),
     })
   }
@@ -430,8 +440,7 @@ export async function fetchSaasMetrics(): Promise<SaasMetrics | null> {
   const now = new Date()
   const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
   const newThisMonth = allCustomers.filter((c) => new Date(c.created).getTime() >= firstOfMonth.getTime()).length
-  const prevTotal = payingCustomers.length + churnedThisMonth
-  const churnRate = prevTotal > 0 ? (churnedThisMonth / prevTotal) * 100 : 0
+  const newPayingThisMonth = payingCustomers.filter((c) => new Date(c.created).getTime() >= firstOfMonth.getTime()).length
 
   // Plan breakdown
   const planMetrics = new Map<PlanName, PlanMetrics>()
@@ -445,34 +454,46 @@ export async function fetchSaasMetrics(): Promise<SaasMetrics | null> {
 
   // Monthly history
   const dedupedInvoices = deduplicateInvoices(allInvoices)
-  const monthlyMap = new Map<string, { revenue: number; customers: Set<string> }>()
+  const monthlyMap = new Map<string, { revenue: number; mrr: number; customers: Set<string> }>()
   for (const inv of dedupedInvoices) {
     const monthKey = `${inv.date.getFullYear()}-${String(inv.date.getMonth() + 1).padStart(2, '0')}`
-    const entry = monthlyMap.get(monthKey) ?? { revenue: 0, customers: new Set() }
+    const entry = monthlyMap.get(monthKey) ?? { revenue: 0, mrr: 0, customers: new Set() }
     entry.revenue += inv.amount
+    entry.mrr += inv.billingInterval === 'annual' ? inv.amount / 12 : inv.amount
     entry.customers.add(inv.customerEmail || normalizeName(inv.customerName))
     monthlyMap.set(monthKey, entry)
   }
 
   const sortedMonths = Array.from(monthlyMap.keys()).sort()
   const cumulativeCustomers = new Set<string>()
+  let prevMonthCustomers = new Set<string>()
   const history: MonthlySnapshot[] = sortedMonths.map((month) => {
     const data = monthlyMap.get(month)!
     const prevSize = cumulativeCustomers.size
     for (const c of data.customers) cumulativeCustomers.add(c)
+    const churned = Array.from(prevMonthCustomers).filter((c) => !data.customers.has(c)).length
+    prevMonthCustomers = new Set(Array.from(data.customers))
     return {
       month, revenue: Math.round(data.revenue * 100) / 100,
-      mrr: Math.round(data.revenue * 100) / 100,
+      mrr: Math.round(data.mrr * 100) / 100,
       customers: data.customers.size,
       newCustomers: cumulativeCustomers.size - prevSize,
+      churnedCustomers: churned,
     }
   })
+
+  // Include Holded churn in total churn (Stripe only tracks cancellations)
+  const lastHistoryChurn = history.length > 0 ? history[history.length - 1].churnedCustomers : 0
+  const totalChurned = Math.max(churnedThisMonth, lastHistoryChurn)
+  const prevTotal = payingCustomers.length + totalChurned
+  const churnRate = prevTotal > 0 ? (totalChurned / prevTotal) * 100 : 0
 
   const result: SaasMetrics = {
     mrr: Math.round(mrr * 100) / 100, arr: Math.round(mrr * 12 * 100) / 100,
     totalCustomers: allCustomers.length, freeCustomers: freeCustomers.length,
     payingCustomers: payingCustomers.length, newCustomersThisMonth: newThisMonth,
-    churnedThisMonth, churnRate: Math.round(churnRate * 10) / 10,
+    newPayingThisMonth,
+    churnedThisMonth: totalChurned, churnRate: Math.round(churnRate * 10) / 10,
     avgRevenuePerCustomer: payingCustomers.length > 0 ? Math.round((mrr / payingCustomers.length) * 100) / 100 : 0,
     planBreakdown: Array.from(planMetrics.values()).filter((p) => p.total > 0),
     customers: allCustomers.sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime()),

@@ -306,7 +306,7 @@ export function ProposalEditor({ initial }: { initial: ProposalData }) {
   async function handleDelete() {
     if (!confirm('¿Eliminar esta propuesta? No se puede deshacer.')) return
     await fetch(`/api/proposals/${data.id}`, { method: 'DELETE' })
-    router.push('/')
+    router.push('/proposals')
   }
 
   async function handleSaveNow() {
@@ -412,7 +412,7 @@ export function ProposalEditor({ initial }: { initial: ProposalData }) {
 
         {/* Header */}
         <div className="flex items-center gap-3 mb-2">
-          <a href="/" className="text-gray-400 hover:text-gray-600 text-sm">← Dashboard</a>
+          <a href="/proposals" className="text-gray-400 hover:text-gray-600 text-sm">← Propuestas</a>
           <div className="flex-1 flex items-center gap-2">
             <input
               className="text-xl font-bold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-[#3E95B0] focus:outline-none px-1 py-0.5"
