@@ -82,7 +82,7 @@ function getPeriodRange(period: Period): { from: Date; to: Date } {
 }
 
 const CUSTOMERS_PER_PAGE = 15
-const CACHE_KEY = 'dashboard_metrics_cache'
+const CACHE_KEY = 'dashboard_metrics_v2'
 
 type SortField = 'customer' | 'plan' | 'monthlyAmount' | 'totalAmount' | 'created'
 type TableFilter = 'all' | 'paying' | 'free' | 'new_all' | 'new_paying' | 'new_free' | 'churned'
