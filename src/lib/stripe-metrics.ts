@@ -290,7 +290,7 @@ async function fetchHoldedData(holdedKey: string) {
     const contact = contactMap.get(contactId) ?? { name: (inv.contact_name as string) ?? contactId, email: '' }
 
     const desc = ((inv.description as string) ?? '').toLowerCase()
-    const isAnnualInv = /anual|annual|12 meses|yearly/i.test(desc) || subtotal >= 400
+    const descIsAnnual = /anual|annual|12 meses|yearly/i.test(desc)
 
     allInvoices.push({
       amount: subtotal,
@@ -298,7 +298,7 @@ async function fetchHoldedData(holdedKey: string) {
       customerEmail: contact.email,
       customerName: contact.name,
       source: 'holded',
-      billingInterval: isAnnualInv ? 'annual' : 'monthly',
+      billingInterval: descIsAnnual ? 'annual' : 'monthly',
     })
 
     // Aggregate for customer records
@@ -321,7 +321,7 @@ async function fetchHoldedData(holdedKey: string) {
       existing.items.push(desc)
     }
 
-    if (/anual|annual|12 meses|yearly/i.test(desc) || subtotal >= 400) {
+    if (descIsAnnual) {
       existing.isAnnual = true
     }
     customerData.set(contactId, existing)
@@ -335,13 +335,18 @@ async function fetchHoldedData(holdedKey: string) {
   for (const [contactId, data] of customerData) {
     const contact = contactMap.get(contactId) ?? { name: contactId, email: '' }
 
-    const recentTotal = allInvoices
+    const recentInvoices = allInvoices
       .filter((inv) => inv.source === 'holded' && inv.date.getTime() >= twelveMonthsAgo &&
         ((inv.customerEmail && inv.customerEmail === contact.email) || inv.customerName === contact.name))
-      .reduce((sum, inv) => sum + inv.amount, 0)
+    const recentTotal = recentInvoices.reduce((sum, inv) => sum + inv.amount, 0)
+
+    // Frequency-based annual detection: <= 2 invoices in 12 months = annual
+    // Override description-based flag if customer invoices frequently
+    const recentCount = recentInvoices.length
+    const isAnnual = data.isAnnual && recentCount <= 3
 
     let monthlyAmount: number
-    if (data.isAnnual) {
+    if (isAnnual) {
       monthlyAmount = recentTotal / 12
     } else {
       const monthsActive = Math.max(1, Math.min(12,
@@ -352,8 +357,8 @@ async function fetchHoldedData(holdedKey: string) {
     customers.push({
       customer: contact.name,
       email: contact.email,
-      plan: detectPlan(data.items.map((name) => ({ name, amount: monthlyAmount }))),
-      billingInterval: data.isAnnual ? 'annual' : 'monthly',
+      plan: detectPlan(data.items.map((name: string) => ({ name, amount: monthlyAmount }))),
+      billingInterval: isAnnual ? 'annual' : 'monthly',
       totalAmount: Math.round(data.total * 100) / 100,
       monthlyAmount: Math.round(monthlyAmount * 100) / 100,
       status: 'active', source: 'holded',
