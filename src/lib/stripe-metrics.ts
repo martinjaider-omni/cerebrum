@@ -177,27 +177,20 @@ async function fetchStripeData(stripeKey: string) {
       itemsForDetection.push({ name, amount: lineAmount / (interval === 'year' ? 12 : 1) })
     }
 
-    // Use REAL billed amount from latest invoice if available (captures overages)
+    // MRR = recurring subscription price only (not latest invoice which may include one-time charges)
     const lastInvoice = latestInvoiceBySubscription.get(subId)
-    let realMonthly: number
-    if (lastInvoice && lastInvoice.subtotal > 0) {
-      // If annual, prorate; otherwise use as-is
-      realMonthly = isAnnual ? lastInvoice.subtotal / 12 : lastInvoice.subtotal
-    } else {
-      realMonthly = planMonthly
-    }
 
     subIntervalMap.set(subId, isAnnual ? 'annual' : 'monthly')
     const plan = detectPlan(itemsForDetection)
     const cust = typeof sub.customer === 'object' ? sub.customer as Record<string, unknown> : null
-    if (plan === 'Free' || realMonthly === 0) freeCount++
+    if (plan === 'Free' || planMonthly === 0) freeCount++
 
     customers.push({
       customer: (cust?.name as string) ?? (cust?.id as string) ?? String(sub.customer),
       email: ((cust?.email as string) ?? '').toLowerCase(),
       plan, billingInterval: isAnnual ? 'annual' : 'monthly',
       totalAmount: lastInvoice ? Math.round(lastInvoice.subtotal * 100) / 100 : Math.round(totalAmount * 100) / 100,
-      monthlyAmount: Math.round(realMonthly * 100) / 100,
+      monthlyAmount: Math.round(planMonthly * 100) / 100,
       status: sub.status as string, source: 'stripe',
       created: new Date(((sub.created as number) ?? 0) * 1000).toISOString(),
       items: itemNames,
