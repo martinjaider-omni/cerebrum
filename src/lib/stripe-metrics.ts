@@ -361,23 +361,25 @@ async function fetchHoldedData(holdedKey: string) {
     const recentInvoices = allInvoices
       .filter((inv) => inv.source === 'holded' && inv.date.getTime() >= twelveMonthsAgo &&
         ((inv.customerEmail && inv.customerEmail === contact.email) || inv.customerName === contact.name))
+    if (recentInvoices.length === 0) continue
     const recentTotal = recentInvoices.reduce((sum, inv) => sum + inv.amount, 0)
 
-    // Annual detection by invoice frequency:
-    // - Description says annual → annual (unless 4+ invoices prove otherwise)
-    // - <= 2 invoices in 12 months → annual (regardless of description)
-    // - 4+ invoices → monthly (clear recurring pattern)
-    const recentCount = recentInvoices.length
-    const isAnnual = recentCount <= 2 || (data.isAnnual && recentCount <= 3)
+    // MRR based on LATEST invoice (reflects current billing, handles plan changes)
+    const sorted = recentInvoices.sort((a, b) => b.date.getTime() - a.date.getTime())
+    const latest = sorted[0]
 
-    let monthlyAmount: number
-    if (isAnnual) {
-      monthlyAmount = recentTotal / 12
-    } else {
-      const monthsActive = Math.max(1, Math.min(12,
-        Math.ceil((now - Math.max(data.firstDate, twelveMonthsAgo)) / (30 * 24 * 60 * 60 * 1000))))
-      monthlyAmount = recentTotal / monthsActive
+    // Detect if latest invoice is annual:
+    // 1. Description keywords
+    let isAnnual = latest.billingInterval === 'annual'
+    // 2. Latest is 5x+ the average of previous invoices → switched to annual
+    if (!isAnnual && sorted.length >= 2) {
+      const prevAvg = sorted.slice(1).reduce((s, inv) => s + inv.amount, 0) / (sorted.length - 1)
+      if (prevAvg > 0 && latest.amount >= prevAvg * 5) isAnnual = true
     }
+    // 3. Single or double invoice with large amount → likely annual
+    if (!isAnnual && sorted.length <= 2 && latest.amount >= 2000) isAnnual = true
+
+    const monthlyAmount = isAnnual ? latest.amount / 12 : latest.amount
 
     customers.push({
       customer: contact.name,
