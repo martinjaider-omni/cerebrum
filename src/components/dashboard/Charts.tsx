@@ -8,7 +8,7 @@ interface MonthlySnapshot {
   mrr: number
   customers: number
   newCustomers: number
-  churnedCustomers: number
+  churnedCustomers?: number
 }
 
 function formatMonth(month: string): string {
