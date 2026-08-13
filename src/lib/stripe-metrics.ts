@@ -49,6 +49,7 @@ export interface SaasMetrics {
   customers: CustomerRecord[]
   history: MonthlySnapshot[]
   newPayingThisMonth: number
+  churnedCustomerDetails: CustomerRecord[]
   sources: { stripe: boolean; holded: boolean }
 }
 
@@ -128,6 +129,7 @@ async function fetchStripeData(stripeKey: string) {
     stripeFetchAll(stripeKey, '/subscriptions', {
       status: 'canceled',
       'current_period_start[gte]': String(Math.floor(firstOfMonth.getTime() / 1000)),
+      'expand[]': 'data.customer',
     }),
     stripeFetchAll(stripeKey, '/invoices', { status: 'paid' }),
   ])
@@ -218,7 +220,24 @@ async function fetchStripeData(stripeKey: string) {
     })
   }
 
-  return { customers, churnedThisMonth: canceledSubs.length, freeCount, invoices }
+  // Extract churned customer details
+  const churnedDetails: CustomerRecord[] = []
+  for (const sub of canceledSubs as Record<string, unknown>[]) {
+    const cust = typeof sub.customer === 'object' ? sub.customer as Record<string, unknown> : null
+    const canceledAt = (sub.canceled_at as number) ?? (sub.ended_at as number) ?? 0
+    churnedDetails.push({
+      customer: (cust?.name as string) ?? (cust?.id as string) ?? String(sub.customer),
+      email: ((cust?.email as string) ?? '').toLowerCase(),
+      plan: 'Canceled' as PlanName,
+      billingInterval: 'monthly',
+      totalAmount: 0, monthlyAmount: 0,
+      status: 'canceled', source: 'stripe',
+      created: new Date(canceledAt * 1000).toISOString(),
+      items: [],
+    })
+  }
+
+  return { customers, churnedThisMonth: canceledSubs.length, freeCount, invoices, churnedDetails }
 }
 
 // ── Holded (API v2 with PAT Bearer) ──────────────────────────────────────────
@@ -418,6 +437,7 @@ export async function fetchSaasMetrics(): Promise<SaasMetrics | null> {
   let holdedCustomers: CustomerRecord[] = []
   let allInvoices: InvoiceRecord[] = []
   let churnedThisMonth = 0
+  let churnedCustomerDetails: CustomerRecord[] = []
   const sources = { stripe: false, holded: false }
 
   const [stripeResult, holdedResult] = await Promise.allSettled([
@@ -428,6 +448,7 @@ export async function fetchSaasMetrics(): Promise<SaasMetrics | null> {
   if (stripeResult.status === 'fulfilled' && stripeResult.value) {
     stripeCustomers = stripeResult.value.customers
     churnedThisMonth = stripeResult.value.churnedThisMonth
+    churnedCustomerDetails = stripeResult.value.churnedDetails
     allInvoices.push(...stripeResult.value.invoices)
     sources.stripe = true
   }
@@ -459,14 +480,35 @@ export async function fetchSaasMetrics(): Promise<SaasMetrics | null> {
 
   // Monthly history
   const dedupedInvoices = deduplicateInvoices(allInvoices)
+  const nowKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   const monthlyMap = new Map<string, { revenue: number; mrr: number; customers: Set<string> }>()
+
+  function ensureMonth(key: string) {
+    if (!monthlyMap.has(key)) monthlyMap.set(key, { revenue: 0, mrr: 0, customers: new Set<string>() })
+    return monthlyMap.get(key)!
+  }
+
   for (const inv of dedupedInvoices) {
     const monthKey = `${inv.date.getFullYear()}-${String(inv.date.getMonth() + 1).padStart(2, '0')}`
-    const entry = monthlyMap.get(monthKey) ?? { revenue: 0, mrr: 0, customers: new Set() }
+    const custKey = inv.customerEmail || normalizeName(inv.customerName)
+    const entry = ensureMonth(monthKey)
     entry.revenue += inv.amount
-    entry.mrr += inv.billingInterval === 'annual' ? inv.amount / 12 : inv.amount
-    entry.customers.add(inv.customerEmail || normalizeName(inv.customerName))
-    monthlyMap.set(monthKey, entry)
+    entry.customers.add(custKey)
+
+    if (inv.billingInterval === 'annual') {
+      // Spread MRR across 12 months from invoice date
+      const monthlyContribution = inv.amount / 12
+      for (let m = 0; m < 12; m++) {
+        const d = new Date(inv.date.getFullYear(), inv.date.getMonth() + m, 1)
+        const fKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+        if (fKey > nowKey) break
+        const fEntry = ensureMonth(fKey)
+        fEntry.mrr += monthlyContribution
+        fEntry.customers.add(custKey)
+      }
+    } else {
+      entry.mrr += inv.amount
+    }
   }
 
   const sortedMonths = Array.from(monthlyMap.keys()).sort()
@@ -502,6 +544,7 @@ export async function fetchSaasMetrics(): Promise<SaasMetrics | null> {
     avgRevenuePerCustomer: payingCustomers.length > 0 ? Math.round((mrr / payingCustomers.length) * 100) / 100 : 0,
     planBreakdown: Array.from(planMetrics.values()).filter((p) => p.total > 0),
     customers: allCustomers.sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime()),
+    churnedCustomerDetails,
     history, sources,
   }
 
