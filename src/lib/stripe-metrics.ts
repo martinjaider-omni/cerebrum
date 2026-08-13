@@ -177,20 +177,31 @@ async function fetchStripeData(stripeKey: string) {
       itemsForDetection.push({ name, amount: lineAmount / (interval === 'year' ? 12 : 1) })
     }
 
-    // MRR = recurring subscription price only (not latest invoice which may include one-time charges)
+    // MRR = latest invoice (captures fixed + variable/metered), with planMonthly as floor
     const lastInvoice = latestInvoiceBySubscription.get(subId)
+    let monthlyAmount = planMonthly
+    if (lastInvoice && lastInvoice.subtotal > 0) {
+      const invoiceMonthly = isAnnual ? lastInvoice.subtotal / 12 : lastInvoice.subtotal
+      // Use invoice amount if >= plan price (includes variable charges)
+      // but cap at 3x plan price to exclude one-time anomalies
+      if (planMonthly > 0 && invoiceMonthly >= planMonthly && invoiceMonthly <= planMonthly * 3) {
+        monthlyAmount = invoiceMonthly
+      } else if (planMonthly === 0) {
+        monthlyAmount = invoiceMonthly // usage-only plans
+      }
+    }
 
     subIntervalMap.set(subId, isAnnual ? 'annual' : 'monthly')
     const plan = detectPlan(itemsForDetection)
     const cust = typeof sub.customer === 'object' ? sub.customer as Record<string, unknown> : null
-    if (plan === 'Free' || planMonthly === 0) freeCount++
+    if (plan === 'Free' || monthlyAmount === 0) freeCount++
 
     customers.push({
       customer: (cust?.name as string) ?? (cust?.id as string) ?? String(sub.customer),
       email: ((cust?.email as string) ?? '').toLowerCase(),
       plan, billingInterval: isAnnual ? 'annual' : 'monthly',
       totalAmount: lastInvoice ? Math.round(lastInvoice.subtotal * 100) / 100 : Math.round(totalAmount * 100) / 100,
-      monthlyAmount: Math.round(planMonthly * 100) / 100,
+      monthlyAmount: Math.round(monthlyAmount * 100) / 100,
       status: sub.status as string, source: 'stripe',
       created: new Date(((sub.created as number) ?? 0) * 1000).toISOString(),
       items: itemNames,
@@ -352,10 +363,12 @@ async function fetchHoldedData(holdedKey: string) {
         ((inv.customerEmail && inv.customerEmail === contact.email) || inv.customerName === contact.name))
     const recentTotal = recentInvoices.reduce((sum, inv) => sum + inv.amount, 0)
 
-    // Frequency-based annual detection: <= 2 invoices in 12 months = annual
-    // Override description-based flag if customer invoices frequently
+    // Annual detection by invoice frequency:
+    // - Description says annual → annual (unless 4+ invoices prove otherwise)
+    // - <= 2 invoices in 12 months → annual (regardless of description)
+    // - 4+ invoices → monthly (clear recurring pattern)
     const recentCount = recentInvoices.length
-    const isAnnual = data.isAnnual && recentCount <= 3
+    const isAnnual = recentCount <= 2 || (data.isAnnual && recentCount <= 3)
 
     let monthlyAmount: number
     if (isAnnual) {
