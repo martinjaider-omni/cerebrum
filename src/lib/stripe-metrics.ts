@@ -168,27 +168,37 @@ async function fetchStripeData(stripeKey: string) {
       const unitAmount = ((price.unit_amount as number) ?? 0) / 100
       const lineAmount = unitAmount * qty
       const interval = recurring?.interval as string
+      const intervalCount = (recurring?.interval_count as number) ?? 1
 
-      if (interval === 'year') { isAnnual = true; planMonthly += lineAmount / 12; totalAmount += lineAmount }
-      else { planMonthly += lineAmount; totalAmount += lineAmount }
+      if (interval === 'year') {
+        isAnnual = true
+        const months = 12 * intervalCount
+        planMonthly += lineAmount / months; totalAmount += lineAmount
+      } else if (interval === 'month') {
+        planMonthly += lineAmount / intervalCount; totalAmount += lineAmount
+        if (intervalCount >= 6) isAnnual = true
+      } else {
+        planMonthly += lineAmount; totalAmount += lineAmount
+      }
 
       const name = (price.nickname as string) ?? ''
       itemNames.push(name || String(price.product ?? ''))
-      itemsForDetection.push({ name, amount: lineAmount / (interval === 'year' ? 12 : 1) })
+      const monthlyEquiv = interval === 'year' ? lineAmount / (12 * intervalCount) : lineAmount / (intervalCount || 1)
+      itemsForDetection.push({ name, amount: monthlyEquiv })
     }
 
-    // MRR = latest invoice (captures fixed + variable/metered), with planMonthly as floor
+    // MRR = plan price (fixed recurring). Use latest invoice only if slightly higher
+    // (captures small variable charges) but not if anomalously high (one-time charges)
     const lastInvoice = latestInvoiceBySubscription.get(subId)
     let monthlyAmount = planMonthly
-    if (lastInvoice && lastInvoice.subtotal > 0) {
-      const invoiceMonthly = isAnnual ? lastInvoice.subtotal / 12 : lastInvoice.subtotal
-      // Use invoice amount if >= plan price (includes variable charges)
-      // but cap at 3x plan price to exclude one-time anomalies
-      if (planMonthly > 0 && invoiceMonthly >= planMonthly && invoiceMonthly <= planMonthly * 3) {
+    if (lastInvoice && lastInvoice.subtotal > 0 && planMonthly > 0) {
+      const invoiceMonthly = isAnnual ? lastInvoice.subtotal / 12 : lastInvoice.subtotal / ((isAnnual ? 1 : 1))
+      // Accept invoice amount only if within 1.5x of plan price (small variable component)
+      if (invoiceMonthly >= planMonthly && invoiceMonthly <= planMonthly * 1.5) {
         monthlyAmount = invoiceMonthly
-      } else if (planMonthly === 0) {
-        monthlyAmount = invoiceMonthly // usage-only plans
       }
+    } else if (planMonthly === 0 && lastInvoice && lastInvoice.subtotal > 0) {
+      monthlyAmount = isAnnual ? lastInvoice.subtotal / 12 : lastInvoice.subtotal
     }
 
     subIntervalMap.set(subId, isAnnual ? 'annual' : 'monthly')
@@ -377,7 +387,7 @@ async function fetchHoldedData(holdedKey: string) {
       if (prevAvg > 0 && latest.amount >= prevAvg * 5) isAnnual = true
     }
     // 3. Single or double invoice with large amount → likely annual
-    if (!isAnnual && sorted.length <= 2 && latest.amount >= 2000) isAnnual = true
+    if (!isAnnual && sorted.length <= 2 && latest.amount >= 1000) isAnnual = true
 
     const monthlyAmount = isAnnual ? latest.amount / 12 : latest.amount
 
@@ -392,6 +402,20 @@ async function fetchHoldedData(holdedKey: string) {
       created: new Date(data.firstDate).toISOString(),
       items: [...new Set(data.items)].slice(0, 5),
     })
+  }
+
+  // Propagate customer-level billing interval to all their invoices
+  // so the MRR history chart prorates annual invoices correctly
+  const custBillingMap = new Map<string, 'monthly' | 'annual'>()
+  for (const c of customers) {
+    if (c.email) custBillingMap.set(c.email, c.billingInterval)
+    custBillingMap.set(c.customer.toLowerCase(), c.billingInterval)
+  }
+  for (let i = 0; i < allInvoices.length; i++) {
+    const inv = allInvoices[i]
+    const key = inv.customerEmail || inv.customerName.toLowerCase()
+    const bi = custBillingMap.get(key) ?? custBillingMap.get(inv.customerName.toLowerCase())
+    if (bi) allInvoices[i] = { ...inv, billingInterval: bi }
   }
 
   return { customers, invoices: allInvoices }
